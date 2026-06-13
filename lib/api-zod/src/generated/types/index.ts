@@ -8,9 +8,14 @@
 
 export * from './analyticsSummary';
 export * from './authResponse';
+export * from './cumulativePnlPoint';
+export * from './dailyPerformance';
+export * from './dailyPerformanceStatus';
 export * from './dashboard';
 export * from './errorResponse';
+export * from './extendedStats';
 export * from './getExpiriesParams';
+export * from './getHeatmapParams';
 export * from './getLeaderboardParams';
 export * from './getLeaderboardPeriod';
 export * from './getOptionsChainParams';

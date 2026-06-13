@@ -1,0 +1,3 @@
+- [Hook queryKey rules](hook-querykey-rules.md) — hooks taking path/query params use (params, options) signature; pass empty {} for params even if unused
+- [OrderStatus casing](order-status-casing.md) — OrderStatus enum values are lowercase: pending/executed/cancelled/rejected (not UPPERCASE)
+- [OTP auth](otp-auth.md) — user wants OTP mobile auth but needs SMS provider; currently email/password JWT; skip until SMS integration available

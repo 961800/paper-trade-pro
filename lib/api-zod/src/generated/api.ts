@@ -545,3 +545,50 @@ export const GetAnalyticsSummaryResponse = zod.object({
 })
 
 
+/**
+ * @summary Get daily trading performance for heatmap visualization
+ */
+export const GetHeatmapQueryParams = zod.object({
+  "year": zod.coerce.number().optional().describe('Year to fetch (defaults to current year)')
+})
+
+export const GetHeatmapResponseItem = zod.object({
+  "date": zod.string(),
+  "pnl": zod.number(),
+  "trades": zod.number(),
+  "wins": zod.number(),
+  "losses": zod.number(),
+  "winRate": zod.number(),
+  "bestTrade": zod.number(),
+  "worstTrade": zod.number(),
+  "status": zod.enum(['profit', 'loss', 'no_trade', 'weekend', 'holiday'])
+})
+export const GetHeatmapResponse = zod.array(GetHeatmapResponseItem)
+
+
+/**
+ * @summary Get extended analytics stats (profit factor, drawdown, streaks, etc.)
+ */
+export const GetExtendedStatsResponse = zod.object({
+  "totalTrades": zod.number(),
+  "winRate": zod.number(),
+  "totalPnl": zod.number(),
+  "profitFactor": zod.number(),
+  "maxDrawdown": zod.number(),
+  "maxConsecutiveWins": zod.number(),
+  "maxConsecutiveLosses": zod.number(),
+  "avgProfit": zod.number(),
+  "avgLoss": zod.number(),
+  "bestTrade": zod.number(),
+  "worstTrade": zod.number(),
+  "roi": zod.number(),
+  "totalProfit": zod.number(),
+  "totalLoss": zod.number(),
+  "cumulativePnl": zod.array(zod.object({
+  "date": zod.string(),
+  "pnl": zod.number(),
+  "cumulative": zod.number()
+}))
+})
+
+

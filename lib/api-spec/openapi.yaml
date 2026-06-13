@@ -567,6 +567,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnalyticsSummary"
 
+  /analytics/heatmap:
+    get:
+      operationId: getHeatmap
+      tags: [analytics]
+      summary: Get daily trading performance for heatmap visualization
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+          description: Year to fetch (defaults to current year)
+      responses:
+        "200":
+          description: Daily heatmap data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyPerformance"
+
+  /analytics/stats:
+    get:
+      operationId: getExtendedStats
+      tags: [analytics]
+      summary: Get extended analytics stats (profit factor, drawdown, streaks, etc.)
+      responses:
+        "200":
+          description: Extended stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtendedStats"
+
 components:
   schemas:
     HealthStatus:
@@ -1034,3 +1068,75 @@ components:
           type: integer
         currentStreak:
           type: integer
+
+    DailyPerformance:
+      type: object
+      required: [date, pnl, trades, wins, losses, winRate, bestTrade, worstTrade, status]
+      properties:
+        date:
+          type: string
+        pnl:
+          type: number
+        trades:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        winRate:
+          type: number
+        bestTrade:
+          type: number
+        worstTrade:
+          type: number
+        status:
+          type: string
+          enum: [profit, loss, no_trade, weekend, holiday]
+
+    CumulativePnlPoint:
+      type: object
+      required: [date, pnl, cumulative]
+      properties:
+        date:
+          type: string
+        pnl:
+          type: number
+        cumulative:
+          type: number
+
+    ExtendedStats:
+      type: object
+      required: [totalTrades, winRate, totalPnl, profitFactor, maxDrawdown, maxConsecutiveWins, maxConsecutiveLosses, avgProfit, avgLoss, bestTrade, worstTrade, roi, cumulativePnl, totalProfit, totalLoss]
+      properties:
+        totalTrades:
+          type: integer
+        winRate:
+          type: number
+        totalPnl:
+          type: number
+        profitFactor:
+          type: number
+        maxDrawdown:
+          type: number
+        maxConsecutiveWins:
+          type: integer
+        maxConsecutiveLosses:
+          type: integer
+        avgProfit:
+          type: number
+        avgLoss:
+          type: number
+        bestTrade:
+          type: number
+        worstTrade:
+          type: number
+        roi:
+          type: number
+        totalProfit:
+          type: number
+        totalLoss:
+          type: number
+        cumulativePnl:
+          type: array
+          items:
+            $ref: "#/components/schemas/CumulativePnlPoint"

@@ -22,9 +22,12 @@ import type {
 import type {
   AnalyticsSummary,
   AuthResponse,
+  DailyPerformance,
   Dashboard,
   ErrorResponse,
+  ExtendedStats,
   GetExpiriesParams,
+  GetHeatmapParams,
   GetLeaderboardParams,
   GetOptionsChainParams,
   GetOrdersParams,
@@ -2107,6 +2110,167 @@ export function useGetAnalyticsSummary<TData = Awaited<ReturnType<typeof getAnal
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAnalyticsSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetHeatmapUrl = (params?: GetHeatmapParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/analytics/heatmap?${stringifiedParams}` : `/api/analytics/heatmap`
+}
+
+/**
+ * @summary Get daily trading performance for heatmap visualization
+ */
+export const getHeatmap = async (params?: GetHeatmapParams, options?: RequestInit): Promise<DailyPerformance[]> => {
+
+  return customFetch<DailyPerformance[]>(getGetHeatmapUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetHeatmapQueryKey = (params?: GetHeatmapParams,) => {
+    return [
+    `/api/analytics/heatmap`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetHeatmapQueryOptions = <TData = Awaited<ReturnType<typeof getHeatmap>>, TError = ErrorType<unknown>>(params?: GetHeatmapParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHeatmap>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetHeatmapQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHeatmap>>> = ({ signal }) => getHeatmap(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getHeatmap>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetHeatmapQueryResult = NonNullable<Awaited<ReturnType<typeof getHeatmap>>>
+export type GetHeatmapQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get daily trading performance for heatmap visualization
+ */
+
+export function useGetHeatmap<TData = Awaited<ReturnType<typeof getHeatmap>>, TError = ErrorType<unknown>>(
+ params?: GetHeatmapParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHeatmap>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetHeatmapQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetExtendedStatsUrl = () => {
+
+
+
+
+  return `/api/analytics/stats`
+}
+
+/**
+ * @summary Get extended analytics stats (profit factor, drawdown, streaks, etc.)
+ */
+export const getExtendedStats = async ( options?: RequestInit): Promise<ExtendedStats> => {
+
+  return customFetch<ExtendedStats>(getGetExtendedStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExtendedStatsQueryKey = () => {
+    return [
+    `/api/analytics/stats`
+    ] as const;
+    }
+
+
+export const getGetExtendedStatsQueryOptions = <TData = Awaited<ReturnType<typeof getExtendedStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExtendedStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExtendedStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExtendedStats>>> = ({ signal }) => getExtendedStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExtendedStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetExtendedStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getExtendedStats>>>
+export type GetExtendedStatsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get extended analytics stats (profit factor, drawdown, streaks, etc.)
+ */
+
+export function useGetExtendedStats<TData = Awaited<ReturnType<typeof getExtendedStats>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExtendedStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetExtendedStatsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

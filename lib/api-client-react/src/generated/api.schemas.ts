@@ -375,6 +375,53 @@ export interface AnalyticsSummary {
   currentStreak: number;
 }
 
+export type DailyPerformanceStatus = typeof DailyPerformanceStatus[keyof typeof DailyPerformanceStatus];
+
+
+export const DailyPerformanceStatus = {
+  profit: 'profit',
+  loss: 'loss',
+  no_trade: 'no_trade',
+  weekend: 'weekend',
+  holiday: 'holiday',
+} as const;
+
+export interface DailyPerformance {
+  date: string;
+  pnl: number;
+  trades: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  bestTrade: number;
+  worstTrade: number;
+  status: DailyPerformanceStatus;
+}
+
+export interface CumulativePnlPoint {
+  date: string;
+  pnl: number;
+  cumulative: number;
+}
+
+export interface ExtendedStats {
+  totalTrades: number;
+  winRate: number;
+  totalPnl: number;
+  profitFactor: number;
+  maxDrawdown: number;
+  maxConsecutiveWins: number;
+  maxConsecutiveLosses: number;
+  avgProfit: number;
+  avgLoss: number;
+  bestTrade: number;
+  worstTrade: number;
+  roi: number;
+  totalProfit: number;
+  totalLoss: number;
+  cumulativePnl: CumulativePnlPoint[];
+}
+
 export type GetOptionsChainParams = {
 symbol: string;
 expiry?: string;
@@ -433,4 +480,11 @@ export const GetLeaderboardPeriod = {
   monthly: 'monthly',
   all: 'all',
 } as const;
+
+export type GetHeatmapParams = {
+/**
+ * Year to fetch (defaults to current year)
+ */
+year?: number;
+};
 
