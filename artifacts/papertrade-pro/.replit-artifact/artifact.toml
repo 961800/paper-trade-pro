@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "PaperTrade Pro"
+version = "1.0.0"
+id = "artifacts/papertrade-pro"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19928
+
+[services.development]
+run = "pnpm --filter @workspace/papertrade-pro run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/papertrade-pro", "run", "build" ]
+publicDir = "artifacts/papertrade-pro/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19928"
+BASE_PATH = "/"

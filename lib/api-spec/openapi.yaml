@@ -3,20 +3,39 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PaperTrade Pro API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: market
+    description: Market data operations
+  - name: orders
+    description: Order management
+  - name: positions
+    description: Position management
+  - name: trades
+    description: Trade history
+  - name: dashboard
+    description: Dashboard and portfolio summary
+  - name: watchlist
+    description: Watchlist management
+  - name: leaderboard
+    description: Leaderboard
+  - name: notifications
+    description: Notifications
+  - name: analytics
+    description: Analytics and performance metrics
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +43,530 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/profile:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /market/indices:
+    get:
+      operationId: getIndices
+      tags: [market]
+      summary: Get all market indices
+      responses:
+        "200":
+          description: List of indices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IndexQuote"
+
+  /market/options:
+    get:
+      operationId: getOptionsChain
+      tags: [market]
+      summary: Get options chain for an index
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: expiry
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Options chain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptionsChain"
+
+  /market/expiries:
+    get:
+      operationId: getExpiries
+      tags: [market]
+      summary: Get available expiry dates for a symbol
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of expiry dates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /market/search:
+    get:
+      operationId: searchInstruments
+      tags: [market]
+      summary: Search instruments
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Instrument"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+
+  /orders:
+    get:
+      operationId: getOrders
+      tags: [orders]
+      summary: Get all orders
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, executed, cancelled, rejected]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+    post:
+      operationId: placeOrder
+      tags: [orders]
+      summary: Place a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Invalid order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get a specific order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: cancelOrder
+      tags: [orders]
+      summary: Cancel a pending order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Cannot cancel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /positions:
+    get:
+      operationId: getPositions
+      tags: [positions]
+      summary: Get all positions
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, closed]
+      responses:
+        "200":
+          description: List of positions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Position"
+
+  /positions/{id}/squareoff:
+    post:
+      operationId: squareOffPosition
+      tags: [positions]
+      summary: Square off (close) a position
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Position squared off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Position"
+        "400":
+          description: Cannot square off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trades:
+    get:
+      operationId: getTrades
+      tags: [trades]
+      summary: Get trade history
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trade history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+
+  /watchlist:
+    get:
+      operationId: getWatchlist
+      tags: [watchlist]
+      summary: Get user watchlist
+      responses:
+        "200":
+          description: Watchlist items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WatchlistItem"
+
+    post:
+      operationId: addToWatchlist
+      tags: [watchlist]
+      summary: Add instrument to watchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchlistInput"
+      responses:
+        "201":
+          description: Added to watchlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistItem"
+
+  /watchlist/{id}:
+    delete:
+      operationId: removeFromWatchlist
+      tags: [watchlist]
+      summary: Remove instrument from watchlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removed from watchlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: Get leaderboard
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, all]
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      summary: Get user notifications
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /analytics/monthly:
+    get:
+      operationId: getMonthlyAnalytics
+      tags: [analytics]
+      summary: Get monthly P&L analytics
+      responses:
+        "200":
+          description: Monthly performance
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlyPerformance"
+
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: Get full analytics summary including win rate, best/worst trades
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +577,460 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    RegisterInput:
+      type: object
+      required: [fullName, email, password, phone, age, city]
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        phone:
+          type: string
+        age:
+          type: integer
+          minimum: 18
+        city:
+          type: string
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    ProfileUpdate:
+      type: object
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        stopLossLimit:
+          type: ["number", "null"]
+        targetPrice:
+          type: ["number", "null"]
+        maxDailyLoss:
+          type: ["number", "null"]
+
+    AuthResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    User:
+      type: object
+      required: [id, fullName, email, phone, age, city, balance, initialCapital, createdAt]
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        age:
+          type: integer
+        city:
+          type: string
+        balance:
+          type: number
+        initialCapital:
+          type: number
+        stopLossLimit:
+          type: ["number", "null"]
+        targetPrice:
+          type: ["number", "null"]
+        maxDailyLoss:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+
+    IndexQuote:
+      type: object
+      required: [symbol, name, ltp, change, changePercent, open, high, low, prevClose]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        ltp:
+          type: number
+        change:
+          type: number
+        changePercent:
+          type: number
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        prevClose:
+          type: number
+
+    OptionsChain:
+      type: object
+      required: [symbol, expiry, underlyingPrice, options]
+      properties:
+        symbol:
+          type: string
+        expiry:
+          type: string
+        underlyingPrice:
+          type: number
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/OptionContract"
+
+    OptionContract:
+      type: object
+      required: [strikePrice, type, premium, ltp, bidPrice, askPrice, lotSize, expiry, oi, volume]
+      properties:
+        strikePrice:
+          type: number
+        type:
+          type: string
+          enum: [CE, PE]
+        premium:
+          type: number
+        ltp:
+          type: number
+        bidPrice:
+          type: number
+        askPrice:
+          type: number
+        lotSize:
+          type: integer
+        expiry:
+          type: string
+        oi:
+          type: integer
+        volume:
+          type: integer
+        iv:
+          type: ["number", "null"]
+        delta:
+          type: ["number", "null"]
+
+    Instrument:
+      type: object
+      required: [symbol, name, type]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+
+    Dashboard:
+      type: object
+      required: [balance, totalPnl, todayPnl, openPositionsCount, portfolioValue, winRate, totalTrades, profitableTrades]
+      properties:
+        balance:
+          type: number
+        totalPnl:
+          type: number
+        todayPnl:
+          type: number
+        openPositionsCount:
+          type: integer
+        portfolioValue:
+          type: number
+        winRate:
+          type: number
+        totalTrades:
+          type: integer
+        profitableTrades:
+          type: integer
+        recentTrades:
+          type: array
+          items:
+            $ref: "#/components/schemas/Trade"
+        openPositions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Position"
+
+    OrderInput:
+      type: object
+      required: [symbol, strikePrice, optionType, orderType, action, quantity, expiry]
+      properties:
+        symbol:
+          type: string
+        strikePrice:
+          type: number
+        optionType:
+          type: string
+          enum: [CE, PE]
+        orderType:
+          type: string
+          enum: [market, limit]
+        action:
+          type: string
+          enum: [buy, sell]
+        quantity:
+          type: integer
+        expiry:
+          type: string
+        limitPrice:
+          type: ["number", "null"]
+        stopLoss:
+          type: ["number", "null"]
+        targetPrice:
+          type: ["number", "null"]
+
+    Order:
+      type: object
+      required: [id, userId, symbol, strikePrice, optionType, orderType, action, quantity, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        symbol:
+          type: string
+        strikePrice:
+          type: number
+        optionType:
+          type: string
+          enum: [CE, PE]
+        orderType:
+          type: string
+          enum: [market, limit]
+        action:
+          type: string
+          enum: [buy, sell]
+        quantity:
+          type: integer
+        executedPrice:
+          type: ["number", "null"]
+        limitPrice:
+          type: ["number", "null"]
+        stopLoss:
+          type: ["number", "null"]
+        targetPrice:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [pending, executed, cancelled, rejected]
+        expiry:
+          type: string
+        createdAt:
+          type: string
+        executedAt:
+          type: ["string", "null"]
+
+    Position:
+      type: object
+      required: [id, userId, symbol, strikePrice, optionType, quantity, averagePrice, currentPrice, pnl, unrealizedPnl, status, expiry, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        symbol:
+          type: string
+        strikePrice:
+          type: number
+        optionType:
+          type: string
+          enum: [CE, PE]
+        quantity:
+          type: integer
+        averagePrice:
+          type: number
+        currentPrice:
+          type: number
+        pnl:
+          type: number
+        unrealizedPnl:
+          type: number
+        status:
+          type: string
+          enum: [open, closed]
+        expiry:
+          type: string
+        createdAt:
+          type: string
+        closedAt:
+          type: ["string", "null"]
+
+    Trade:
+      type: object
+      required: [id, userId, symbol, strikePrice, optionType, action, quantity, entryPrice, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        symbol:
+          type: string
+        strikePrice:
+          type: number
+        optionType:
+          type: string
+          enum: [CE, PE]
+        action:
+          type: string
+          enum: [buy, sell]
+        quantity:
+          type: integer
+        entryPrice:
+          type: number
+        exitPrice:
+          type: ["number", "null"]
+        pnl:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [open, closed]
+        expiry:
+          type: string
+        createdAt:
+          type: string
+        closedAt:
+          type: ["string", "null"]
+
+    WatchlistInput:
+      type: object
+      required: [symbol, name, type]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+
+    WatchlistItem:
+      type: object
+      required: [id, userId, symbol, name, type, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        symbol:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        createdAt:
+          type: string
+
+    LeaderboardEntry:
+      type: object
+      required: [rank, userId, fullName, city, totalPnl, percentageGain, totalTrades, winRate]
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: string
+        city:
+          type: string
+        totalPnl:
+          type: number
+        percentageGain:
+          type: number
+        totalTrades:
+          type: integer
+        winRate:
+          type: number
+
+    Notification:
+      type: object
+      required: [id, userId, type, title, message, isRead, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        type:
+          type: string
+          enum: [order_executed, profit_target, stop_loss, general]
+        title:
+          type: string
+        message:
+          type: string
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+
+    MonthlyPerformance:
+      type: object
+      required: [month, year, pnl, trades, winRate]
+      properties:
+        month:
+          type: string
+        year:
+          type: integer
+        pnl:
+          type: number
+        trades:
+          type: integer
+        winRate:
+          type: number
+
+    AnalyticsSummary:
+      type: object
+      required: [totalTrades, winRate, totalPnl, avgPnlPerTrade, bestTrade, worstTrade, profitDays, lossDays, currentStreak]
+      properties:
+        totalTrades:
+          type: integer
+        winRate:
+          type: number
+        totalPnl:
+          type: number
+        avgPnlPerTrade:
+          type: number
+        bestTrade:
+          type: number
+        worstTrade:
+          type: number
+        profitDays:
+          type: integer
+        lossDays:
+          type: integer
+        currentStreak:
+          type: integer

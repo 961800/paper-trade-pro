@@ -1,0 +1,220 @@
+Build a modern web application called **PaperTrade Pro** for Indian stock market paper trading. The application should simulate real trading without using real money.
+
+### Main Features
+
+#### 1. User Authentication
+
+* Sign up and login functionality.
+* Collect basic details:
+
+  * Full Name
+  * Email
+  * Phone Number
+  * Age
+  * City
+* Store user data securely.
+* Each new user should receive a virtual capital of ₹1,00,000.
+
+#### 2. Dashboard
+
+Display:
+
+* Available balance
+* Total P&L (Profit and Loss)
+* Today's P&L
+* Open positions
+* Trade history
+* Portfolio value
+* Win rate percentage
+
+#### 3. Market Data
+
+Provide real-time or simulated market movement for:
+
+* NIFTY 50
+* BANKNIFTY
+* SENSEX
+* FINNIFTY
+
+Show:
+
+* Current price
+* Change
+* Percentage change
+* High
+* Low
+* Open
+* Previous close
+
+#### 4. Options Trading
+
+Support only option buying and selling.
+
+Allow users to trade:
+
+* Call Options (CE)
+* Put Options (PE)
+
+Display:
+
+* Strike Price
+* Premium
+* Expiry Date
+* Lot Size
+* LTP (Last Traded Price)
+* Bid Price
+* Ask Price
+
+Users should be able to:
+
+* Buy CE
+* Buy PE
+* Sell CE
+* Sell PE
+* Square off positions
+* View realized and unrealized profit and loss
+
+#### 5. Order Types
+
+Support:
+
+* Market Order
+* Limit Order
+
+#### 6. Positions Page
+
+Show:
+
+* Quantity
+* Average Price
+* Current Price
+* Profit/Loss
+* Status (Open/Closed)
+
+#### 7. Trade History
+
+Maintain complete history:
+
+* Date and Time
+* Instrument
+* CE/PE
+* Buy/Sell
+* Quantity
+* Entry Price
+* Exit Price
+* Profit/Loss
+
+#### 8. Charts
+
+Provide TradingView charts with:
+
+* 1 Minute
+* 5 Minute
+* 15 Minute
+* 1 Hour
+* Daily
+
+Include indicators:
+
+* EMA
+* SMA
+* RSI
+* MACD
+* Bollinger Bands
+
+#### 9. User Interface
+
+Create a professional UI inspired by:
+
+* Groww
+* Upstox
+* Zerodha Kite
+
+Requirements:
+
+* Dark mode and light mode.
+* Responsive design.
+* Mobile-friendly.
+* Easy to use for beginners.
+* Sidebar navigation.
+* Professional dashboard cards.
+
+#### 10. Leaderboard
+
+Show top paper traders based on:
+
+* Total return
+* Percentage gain
+* Monthly profit
+
+#### 11. Notifications
+
+Display notifications for:
+
+* Order execution
+* Profit target reached
+* Stop loss hit
+
+#### 12. Risk Management
+
+Include:
+
+* Stop Loss
+* Target Price
+* Maximum daily loss limit
+* Position size calculator
+
+#### 13. Backend
+
+Use:
+
+* Python Flask or FastAPI
+* PostgreSQL database
+
+Tables:
+Users
+Portfolio
+Orders
+Positions
+TradeHistory
+Leaderboard
+
+#### 14. APIs
+
+Integrate market data APIs for Indian indices and options data. If real-time APIs are unavailable, create a realistic simulator that moves prices according to actual market conditions.
+
+#### 15. Additional Features
+
+* Search instruments.
+* Watchlist.
+* Favorite contracts.
+* P&L analytics.
+* Monthly performance chart.
+* Download trade history as CSV.
+* User profile page.
+* Settings page.
+* Password reset.
+* Session management.
+
+#### 16. Home Page
+
+Display:
+
+* Hero section
+* Features section
+* Market overview
+* About paper trading
+* Login and Register buttons
+
+#### 17. Design Requirements
+
+Use:
+
+* React + TypeScript frontend.
+* Tailwind CSS.
+* Recharts for analytics.
+* TradingView widget for charts.
+* Modern cards and tables.
+* Smooth animations.
+
+The application should look and feel similar to Groww, Upstox, and Zerodha Kite, with a clean, premium, and beginner-friendly design.
