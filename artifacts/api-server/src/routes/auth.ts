@@ -101,7 +101,7 @@ router.post("/send-otp", async (req, res): Promise<void> => {
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(phone, { otp, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 });
+  otpStore.set(phone, { otp, expiresAt: Date.now() + 5 * 60 * 1000, attempts: 0 });
 
   // Demo mode: return OTP in response (no SMS provider configured)
   res.json({
