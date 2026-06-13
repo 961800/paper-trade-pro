@@ -1,0 +1,304 @@
+### Authentication and User Access
+
+Implement secure mobile number authentication.
+
+#### OTP Login Flow
+
+* User must enter their mobile number.
+* Send a 6-digit OTP.
+* Access to the application is allowed only after successful OTP verification.
+* If the OTP is incorrect, expired, or invalid, deny access and show "Invalid OTP. Please try again."
+* Limit OTP attempts to prevent abuse.
+* Allow OTP resend after 30 seconds.
+* Maintain secure user sessions.
+
+---
+
+### Trading Performance Heatmap (LeetCode Style)
+
+Create a contribution-style heatmap similar to LeetCode submissions, but for trading performance.
+
+#### Daily Heatmap Colors
+
+##### Profit Days
+
+* Dark Green = High Profit
+* Medium Green = Moderate Profit
+* Light Green = Small Profit
+
+##### Loss Days
+
+* Light Red = Small Loss
+* Medium Red = Moderate Loss
+* Dark Red = Heavy Loss
+
+##### No Trade Days
+
+* White box
+* Tooltip should display:
+  "No Trades"
+
+##### Market Holidays
+
+* Orange box
+* Tooltip should display:
+  "Market Holiday"
+
+##### Weekends
+
+* Grey box
+* Tooltip should display:
+  "Weekend"
+
+---
+
+### Heatmap Interaction
+
+When the user clicks any day, show:
+
+Date
+
+Number of trades
+
+Winning trades
+
+Losing trades
+
+Total profit or loss
+
+Profit percentage
+
+Average trade profit
+
+Largest profit
+
+Largest loss
+
+Trade details
+
+Example:
+
+Date: 14 June 2026
+
+Trades: 8
+
+Winning Trades: 5
+
+Losing Trades: 3
+
+Net P&L: +₹4,250
+
+Win Rate: 62%
+
+Largest Profit: ₹2,100
+
+Largest Loss: ₹850
+
+---
+
+### Time Filters
+
+Provide:
+
+Daily
+
+Weekly
+
+Monthly
+
+Yearly
+
+All Time
+
+Users can switch between these views.
+
+---
+
+### Weekly Heatmap
+
+Display each week's overall result.
+
+Green = Profitable Week
+
+Red = Losing Week
+
+Orange = Market Holidays
+
+White = No Trades
+
+Clicking a week should show:
+
+Week Profit
+
+Total Trades
+
+Win Rate
+
+Maximum Drawdown
+
+Average Return
+
+---
+
+### Monthly Heatmap
+
+Display month-wise trading performance.
+
+Clicking a month should show:
+
+Total Profit
+
+Total Loss
+
+Net P&L
+
+Winning Days
+
+Losing Days
+
+No Trade Days
+
+Average Daily Return
+
+Best Trading Day
+
+Worst Trading Day
+
+---
+
+### Yearly Analytics
+
+Display:
+
+Total Profit
+
+Total Loss
+
+Net Profit
+
+ROI Percentage
+
+Total Trades
+
+Winning Trades
+
+Losing Trades
+
+Largest Winning Trade
+
+Largest Losing Trade
+
+Maximum Drawdown
+
+Average Profit Per Trade
+
+Win Ratio
+
+Profit Factor
+
+---
+
+### Overall Statistics Panel
+
+Below the heatmap display:
+
+Daily Net Profit
+
+Weekly Net Profit
+
+Monthly Net Profit
+
+Yearly Net Profit
+
+Overall Net Profit
+
+Overall Net Loss
+
+Total Number of Trades
+
+Winning Percentage
+
+Profit Factor
+
+Average Profit Per Trade
+
+Average Loss Per Trade
+
+Maximum Consecutive Wins
+
+Maximum Consecutive Losses
+
+Maximum Drawdown
+
+---
+
+### Charts and Visualization
+
+Add:
+
+Profit Curve
+
+Cumulative P&L Chart
+
+Weekly Performance Chart
+
+Monthly Performance Chart
+
+Yearly Performance Chart
+
+Winning vs Losing Pie Chart
+
+Trade Distribution Chart
+
+---
+
+### User Experience
+
+Heatmap boxes should have hover effects.
+
+On mouse hover display:
+
+Date
+
+Profit or Loss Amount
+
+Number of Trades
+
+Win Rate
+
+Largest Profit
+
+Largest Loss
+
+Market Status
+
+Include smooth animations.
+
+Use colors similar to GitHub and LeetCode contribution graphs.
+
+The heatmap should automatically update after every completed trade.
+
+Store historical data permanently in the database.
+
+---
+
+### Technology
+
+Frontend:
+React + TypeScript + Tailwind CSS
+
+Charts:
+Recharts
+
+Heatmap:
+react-calendar-heatmap
+
+Backend:
+Python FastAPI
+
+Database:
+PostgreSQL
+
+Real-time updates using WebSockets.
+
+The application UI should be modern and inspired by Groww, Zerodha Kite, and Upstox with a premium dark theme.
