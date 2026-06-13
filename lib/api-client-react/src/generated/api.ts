@@ -38,11 +38,14 @@ import type {
   Instrument,
   LeaderboardEntry,
   LoginInput,
+  MarketStatus,
   MonthlyPerformance,
   Notification,
   OptionsChain,
   Order,
   OrderInput,
+  OtpRequest,
+  OtpResponse,
   Position,
   ProfileUpdate,
   RegisterInput,
@@ -502,6 +505,154 @@ export const useUpdateProfile = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateProfileMutationOptions(options));
     }
+
+export const getSendOtpUrl = () => {
+
+
+
+
+  return `/api/auth/send-otp`
+}
+
+/**
+ * @summary Send OTP to phone number for verification
+ */
+export const sendOtp = async (otpRequest: OtpRequest, options?: RequestInit): Promise<OtpResponse> => {
+
+  return customFetch<OtpResponse>(getSendOtpUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      otpRequest,)
+  }
+);}
+
+
+
+
+export const getSendOtpMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOtp>>, TError,{data: BodyType<OtpRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendOtp>>, TError,{data: BodyType<OtpRequest>}, TContext> => {
+
+const mutationKey = ['sendOtp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendOtp>>, {data: BodyType<OtpRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendOtp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendOtpMutationResult = NonNullable<Awaited<ReturnType<typeof sendOtp>>>
+    export type SendOtpMutationBody = BodyType<OtpRequest>
+    export type SendOtpMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Send OTP to phone number for verification
+ */
+export const useSendOtp = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOtp>>, TError,{data: BodyType<OtpRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendOtp>>,
+        TError,
+        {data: BodyType<OtpRequest>},
+        TContext
+      > => {
+      return useMutation(getSendOtpMutationOptions(options));
+    }
+
+export const getGetMarketStatusUrl = () => {
+
+
+
+
+  return `/api/market/status`
+}
+
+/**
+ * @summary Get current market status
+ */
+export const getMarketStatus = async ( options?: RequestInit): Promise<MarketStatus> => {
+
+  return customFetch<MarketStatus>(getGetMarketStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMarketStatusQueryKey = () => {
+    return [
+    `/api/market/status`
+    ] as const;
+    }
+
+
+export const getGetMarketStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMarketStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarketStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMarketStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMarketStatus>>> = ({ signal }) => getMarketStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMarketStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMarketStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getMarketStatus>>>
+export type GetMarketStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get current market status
+ */
+
+export function useGetMarketStatus<TData = Awaited<ReturnType<typeof getMarketStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarketStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMarketStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetIndicesUrl = () => {
 

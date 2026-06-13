@@ -151,6 +151,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
 
+  /auth/send-otp:
+    post:
+      operationId: sendOtp
+      tags: [auth]
+      summary: Send OTP to phone number for verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpRequest"
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpResponse"
+        "400":
+          description: Invalid phone number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /market/status:
+    get:
+      operationId: getMarketStatus
+      tags: [market]
+      summary: Get current market status
+      responses:
+        "200":
+          description: Market status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketStatus"
+
   /market/indices:
     get:
       operationId: getIndices
@@ -631,11 +675,11 @@ components:
 
     RegisterInput:
       type: object
-      required: [fullName, email, password, phone, age, city]
+      required: [fullName, email, password, phone, age, city, otp]
       properties:
         fullName:
           type: string
-          minLength: 2
+          minLength: 3
         email:
           type: string
           format: email
@@ -649,6 +693,10 @@ components:
           minimum: 18
         city:
           type: string
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
 
     LoginInput:
       type: object
@@ -1140,3 +1188,36 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CumulativePnlPoint"
+
+    MarketStatus:
+      type: object
+      required: [status, message, tradingEnabled]
+      properties:
+        status:
+          type: string
+          enum: [pre-open, open, closed, weekend, holiday]
+        message:
+          type: string
+        tradingEnabled:
+          type: boolean
+        nextOpenAt:
+          type: string
+
+    OtpRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+
+    OtpResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        otp:
+          type: string
+          description: "Demo only: OTP returned in response since no SMS provider is configured"

@@ -19,7 +19,7 @@ export interface SuccessResponse {
 }
 
 export interface RegisterInput {
-  /** @minLength 2 */
+  /** @minLength 3 */
   fullName: string;
   email: string;
   /** @minLength 6 */
@@ -28,6 +28,11 @@ export interface RegisterInput {
   /** @minimum 18 */
   age: number;
   city: string;
+  /**
+     * @minLength 6
+     * @maxLength 6
+     */
+  otp: string;
 }
 
 export interface LoginInput {
@@ -420,6 +425,35 @@ export interface ExtendedStats {
   totalProfit: number;
   totalLoss: number;
   cumulativePnl: CumulativePnlPoint[];
+}
+
+export type MarketStatusStatus = typeof MarketStatusStatus[keyof typeof MarketStatusStatus];
+
+
+export const MarketStatusStatus = {
+  'pre-open': 'pre-open',
+  open: 'open',
+  closed: 'closed',
+  weekend: 'weekend',
+  holiday: 'holiday',
+} as const;
+
+export interface MarketStatus {
+  status: MarketStatusStatus;
+  message: string;
+  tradingEnabled: boolean;
+  nextOpenAt?: string;
+}
+
+export interface OtpRequest {
+  phone: string;
+}
+
+export interface OtpResponse {
+  success: boolean;
+  message: string;
+  /** Demo only: OTP returned in response since no SMS provider is configured */
+  otp?: string;
 }
 
 export type GetOptionsChainParams = {

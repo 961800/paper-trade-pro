@@ -19,11 +19,14 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Register a new user
  */
-export const registerBodyFullNameMin = 2;
+export const registerBodyFullNameMin = 3;
 
 export const registerBodyPasswordMin = 6;
 
 export const registerBodyAgeMin = 18;
+
+export const registerBodyOtpMin = 6;
+export const registerBodyOtpMax = 6;
 
 
 
@@ -33,7 +36,8 @@ export const RegisterBody = zod.object({
   "password": zod.string().min(registerBodyPasswordMin),
   "phone": zod.string(),
   "age": zod.number().min(registerBodyAgeMin),
-  "city": zod.string()
+  "city": zod.string(),
+  "otp": zod.string().min(registerBodyOtpMin).max(registerBodyOtpMax)
 })
 
 
@@ -117,6 +121,31 @@ export const UpdateProfileResponse = zod.object({
   "targetPrice": zod.number().nullish(),
   "maxDailyLoss": zod.number().nullish(),
   "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Send OTP to phone number for verification
+ */
+export const SendOtpBody = zod.object({
+  "phone": zod.string()
+})
+
+export const SendOtpResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string(),
+  "otp": zod.string().optional().describe('Demo only: OTP returned in response since no SMS provider is configured')
+})
+
+
+/**
+ * @summary Get current market status
+ */
+export const GetMarketStatusResponse = zod.object({
+  "status": zod.enum(['pre-open', 'open', 'closed', 'weekend', 'holiday']),
+  "message": zod.string(),
+  "tradingEnabled": zod.boolean(),
+  "nextOpenAt": zod.string().optional()
 })
 
 

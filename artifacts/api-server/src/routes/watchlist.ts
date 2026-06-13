@@ -50,7 +50,7 @@ router.post("/", async (req: Request, res): Promise<void> => {
 
 router.delete("/:id", async (req: Request, res): Promise<void> => {
   const userId = (req as AuthReq).userId;
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   await db.delete(watchlistTable)
     .where(and(eq(watchlistTable.id, id), eq(watchlistTable.userId, userId)));
   res.json({ success: true, message: "Removed from watchlist" });

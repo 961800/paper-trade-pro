@@ -1,9 +1,14 @@
 import { Router } from "express";
-import { getAllIndices, getIndexQuote, getOptionsChain, getExpiries } from "../lib/market-simulator";
+import { getAllIndices, getIndexQuote, getOptionsChain, getExpiries, getMarketStatus } from "../lib/market-simulator";
 
 const router = Router();
 
 const VALID_SYMBOLS = ["NIFTY", "BANKNIFTY", "SENSEX", "FINNIFTY"];
+
+router.get("/status", (_req, res): void => {
+  const status = getMarketStatus();
+  res.json(status);
+});
 
 router.get("/indices", (_req, res): void => {
   const indices = getAllIndices();
@@ -45,10 +50,10 @@ router.get("/search", (req, res): void => {
 
 function getFullName(symbol: string): string {
   const names: Record<string, string> = {
-    NIFTY: "NIFTY 50",
+    NIFTY:     "NIFTY 50",
     BANKNIFTY: "BANK NIFTY",
-    SENSEX: "SENSEX",
-    FINNIFTY: "FINNIFTY",
+    SENSEX:    "SENSEX",
+    FINNIFTY:  "FINNIFTY",
   };
   return names[symbol] ?? symbol;
 }

@@ -7,7 +7,7 @@
  */
 
 export interface RegisterInput {
-  /** @minLength 2 */
+  /** @minLength 3 */
   fullName: string;
   email: string;
   /** @minLength 6 */
@@ -16,4 +16,9 @@ export interface RegisterInput {
   /** @minimum 18 */
   age: number;
   city: string;
+  /**
+     * @minLength 6
+     * @maxLength 6
+     */
+  otp: string;
 }

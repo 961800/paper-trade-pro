@@ -6,9 +6,11 @@ import {
   useGetOptionsChain,
   useGetExpiries,
   usePlaceOrder,
+  useGetMarketStatus,
   getGetIndicesQueryKey,
   getGetOptionsChainQueryKey,
   getGetExpiriesQueryKey,
+  getGetMarketStatusQueryKey,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,12 +20,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { ArrowUpIcon, ArrowDownIcon, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
+import { ArrowUpIcon, ArrowDownIcon, TrendingUp, TrendingDown, AlertCircle, Clock, Ban } from "lucide-react";
 
 function useSearchParam(key: string) {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get(key) ?? "";
 }
+
+const MARKET_STATUS_COLORS: Record<string, string> = {
+  open:      "bg-green-500/15 text-green-400 border-green-500/30",
+  "pre-open":"bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  closed:    "bg-muted text-muted-foreground border-border",
+  weekend:   "bg-muted text-muted-foreground border-border",
+  holiday:   "bg-orange-500/15 text-orange-400 border-orange-500/30",
+};
 
 export default function Trade() {
   const [, setLocation] = useLocation();
@@ -44,8 +54,12 @@ export default function Trade() {
   const [lots, setLots] = useState(1);
   const [limitPrice, setLimitPrice] = useState("");
 
+  const { data: marketStatus } = useGetMarketStatus({
+    query: { queryKey: getGetMarketStatusQueryKey(), refetchInterval: 30000 },
+  });
+
   const { data: indices } = useGetIndices({
-    query: { queryKey: getGetIndicesQueryKey(), refetchInterval: 10000 },
+    query: { queryKey: getGetIndicesQueryKey(), refetchInterval: 3000 },
   });
 
   const { data: expiries } = useGetExpiries(
@@ -63,7 +77,7 @@ export default function Trade() {
       query: {
         queryKey: getGetOptionsChainQueryKey({ symbol, expiry: selectedExpiry || "2026-06-26" }),
         enabled: !!selectedExpiry,
-        refetchInterval: 5000,
+        refetchInterval: 2000,
       },
     }
   );
@@ -71,7 +85,8 @@ export default function Trade() {
   const placeOrderMutation = usePlaceOrder();
 
   const selectedIndex = indices?.find((i) => i.symbol === symbol);
-  const atmStrike = chain ? Math.round(chain.underlyingPrice / 50) * 50 : 0;
+  const strikeInterval = symbol === "SENSEX" ? 500 : symbol === "BANKNIFTY" ? 200 : 100;
+  const atmStrike = chain ? Math.round(chain.underlyingPrice / strikeInterval) * strikeInterval : 0;
 
   const selectedOption = chain?.options.find(
     (o) => o.strikePrice === selectedStrike && o.type === selectedType
@@ -80,15 +95,24 @@ export default function Trade() {
   const lotSize = selectedOption?.lotSize ?? 50;
   const ltp = selectedOption?.ltp ?? 0;
   const orderValue = ltp * lotSize * lots;
-  const margin = orderValue;
 
   const strikes = chain
     ? Array.from(new Set(chain.options.map((o) => o.strikePrice))).sort((a, b) => a - b)
     : [];
 
+  const tradingEnabled = marketStatus?.tradingEnabled ?? true;
+
   const handlePlaceOrder = async () => {
     if (!selectedStrike || !selectedExpiry) {
       toast({ variant: "destructive", title: "Select strike and expiry" });
+      return;
+    }
+    if (lots <= 0) {
+      toast({ variant: "destructive", title: "Invalid quantity", description: "Lots must be at least 1." });
+      return;
+    }
+    if (orderType === "limit" && (!limitPrice || parseFloat(limitPrice) <= 0)) {
+      toast({ variant: "destructive", title: "Invalid limit price", description: "Please enter a valid limit price." });
       return;
     }
     try {
@@ -120,15 +144,40 @@ export default function Trade() {
   return (
     <Layout>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Trade Options</h1>
-          <p className="text-muted-foreground text-sm">Select instrument · Set lots · Place order</p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Trade Options</h1>
+            <p className="text-muted-foreground text-sm">Select instrument · Set lots · Place order</p>
+          </div>
+          {marketStatus && (
+            <Badge
+              variant="outline"
+              className={cn("text-xs gap-1.5 px-3 py-1.5", MARKET_STATUS_COLORS[marketStatus.status])}
+            >
+              <span className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                marketStatus.status === "open" ? "bg-green-500 animate-pulse" : "bg-current opacity-60"
+              )} />
+              {marketStatus.message}
+            </Badge>
+          )}
         </div>
 
+        {marketStatus && !marketStatus.tradingEnabled && marketStatus.status !== "pre-open" && (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center gap-3 text-sm text-muted-foreground">
+            <Ban className="w-4 h-4 shrink-0" />
+            <span>Trading is currently disabled — {marketStatus.message}. You can still explore instruments and plan your trades.</span>
+          </div>
+        )}
+        {marketStatus?.status === "pre-open" && (
+          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-center gap-3 text-sm text-yellow-400">
+            <Clock className="w-4 h-4 shrink-0" />
+            <span>Pre-Open session (09:00–09:15 IST). Orders will be accepted from 09:15.</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left: Symbol & Chain */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Symbol selector */}
             <Card>
               <CardContent className="p-4">
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -157,7 +206,6 @@ export default function Trade() {
               </CardContent>
             </Card>
 
-            {/* Expiry */}
             {expiries && expiries.length > 0 && (
               <div className="flex gap-2 flex-wrap items-center">
                 <span className="text-sm text-muted-foreground">Expiry:</span>
@@ -169,7 +217,6 @@ export default function Trade() {
               </div>
             )}
 
-            {/* CE / PE toggle */}
             <div className="flex gap-2">
               <Button
                 variant={selectedType === "CE" ? "default" : "outline"}
@@ -187,7 +234,6 @@ export default function Trade() {
               </Button>
             </div>
 
-            {/* Strike selector */}
             <Card>
               <CardHeader className="py-2 px-4 border-b border-border">
                 <CardTitle className="text-xs text-muted-foreground font-medium">Select Strike Price</CardTitle>
@@ -241,14 +287,12 @@ export default function Trade() {
             </Card>
           </div>
 
-          {/* Right: Order Panel */}
           <div className="space-y-4">
             <Card className={cn("border-2", action === "buy" ? "border-green-500/40" : "border-red-500/40")}>
               <CardHeader className="py-3 px-4 border-b border-border">
                 <CardTitle className="text-sm">Place Order</CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
-                {/* Selected Option Info */}
                 {selectedOption ? (
                   <div className="bg-muted/30 rounded-lg p-3 space-y-1">
                     <p className="text-xs text-muted-foreground">Selected Instrument</p>
@@ -265,7 +309,6 @@ export default function Trade() {
                   </div>
                 )}
 
-                {/* BUY / SELL */}
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant={action === "buy" ? "default" : "outline"}
@@ -283,7 +326,6 @@ export default function Trade() {
                   </Button>
                 </div>
 
-                {/* Order Type */}
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Order Type</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -305,7 +347,6 @@ export default function Trade() {
                   </div>
                 )}
 
-                {/* Lots */}
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Lots</p>
                   <div className="flex items-center gap-2">
@@ -316,7 +357,6 @@ export default function Trade() {
                   <p className="text-xs text-muted-foreground mt-1">{lots * lotSize} qty ({lotSize} per lot)</p>
                 </div>
 
-                {/* Order Summary */}
                 <div className="border border-border rounded-lg p-3 space-y-1.5 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">LTP</span>
@@ -339,27 +379,39 @@ export default function Trade() {
                 </div>
 
                 <Button
-                  className={cn("w-full font-bold", action === "buy" ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white")}
-                  disabled={!selectedStrike || placeOrderMutation.isPending}
+                  className={cn(
+                    "w-full font-bold",
+                    !tradingEnabled && "opacity-50 cursor-not-allowed",
+                    action === "buy" ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white"
+                  )}
+                  disabled={!selectedStrike || placeOrderMutation.isPending || !tradingEnabled}
                   onClick={handlePlaceOrder}
+                  title={!tradingEnabled ? marketStatus?.message : undefined}
                 >
-                  {placeOrderMutation.isPending ? "Placing..." : `${action.toUpperCase()} ${lots} Lot${lots > 1 ? "s" : ""}`}
+                  {!tradingEnabled ? (
+                    <><Ban className="w-4 h-4 mr-2" /> Market Closed</>
+                  ) : placeOrderMutation.isPending ? "Placing..." : (
+                    `${action.toUpperCase()} ${lots} Lot${lots > 1 ? "s" : ""}`
+                  )}
                 </Button>
+
+                {!tradingEnabled && marketStatus && (
+                  <p className="text-xs text-center text-muted-foreground">{marketStatus.message}</p>
+                )}
               </CardContent>
             </Card>
 
-            {/* Quick Stats */}
             {selectedOption && (
               <Card>
                 <CardContent className="p-4 space-y-2 text-sm">
                   <p className="text-xs text-muted-foreground font-semibold uppercase">Greeks & Data</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { label: "IV", value: selectedOption.iv ? `${selectedOption.iv.toFixed(1)}%` : "-" },
-                      { label: "Delta", value: selectedOption.delta?.toFixed(3) ?? "-" },
-                      { label: "Bid", value: `₹${selectedOption.bidPrice.toFixed(2)}` },
-                      { label: "Ask", value: `₹${selectedOption.askPrice.toFixed(2)}` },
-                      { label: "OI", value: selectedOption.oi.toLocaleString("en-IN") },
+                      { label: "IV",     value: selectedOption.iv     ? `${selectedOption.iv.toFixed(1)}%`    : "-" },
+                      { label: "Delta",  value: selectedOption.delta?.toFixed(3) ?? "-" },
+                      { label: "Bid",    value: `₹${selectedOption.bidPrice.toFixed(2)}` },
+                      { label: "Ask",    value: `₹${selectedOption.askPrice.toFixed(2)}` },
+                      { label: "OI",     value: selectedOption.oi.toLocaleString("en-IN") },
                       { label: "Volume", value: selectedOption.volume.toLocaleString("en-IN") },
                     ].map(({ label, value }) => (
                       <div key={label}>

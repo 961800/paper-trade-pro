@@ -1,0 +1,253 @@
+Fix the following issues in the application.
+
+## 1. User Input Validation
+
+Do not allow users to register with invalid information.
+
+### Full Name
+
+* Required.
+* Minimum 3 characters.
+* Only alphabets and spaces are allowed.
+
+Show error:
+"Please enter a valid name."
+
+---
+
+### Email Validation
+
+Validate email format.
+
+Examples of valid emails:
+[user@gmail.com](mailto:user@gmail.com)
+[abc@yahoo.com](mailto:abc@yahoo.com)
+
+Examples of invalid emails:
+abc
+gmail.com
+abc@
+
+If invalid, show:
+"Please enter a valid email address."
+
+Registration should not proceed until a valid email is entered.
+
+---
+
+### Phone Number Validation
+
+Allow only Indian mobile numbers.
+
+Requirements:
+
+* Exactly 10 digits.
+* Must start with 6, 7, 8, or 9.
+* No letters or symbols.
+
+Examples:
+
+Valid:
+9876543210
+
+Invalid:
+1234567890
+abcd12345
+99999
+
+Show error:
+"Please enter a valid Indian mobile number."
+
+---
+
+### OTP Verification
+
+Access should be granted only after successful OTP verification.
+
+Wrong OTP:
+Show:
+"Invalid OTP"
+
+Expired OTP:
+Show:
+"OTP expired"
+
+Maximum attempts:
+3
+
+After 3 failed attempts:
+Lock verification for 5 minutes.
+
+---
+
+## 2. Market Data Accuracy
+
+Current prices are incorrect.
+
+Fix market data so that:
+
+NIFTY
+
+BANKNIFTY
+
+SENSEX
+
+FINNIFTY
+
+Options CE and PE prices
+
+Strike prices
+
+Expiry dates
+
+LTP
+
+Bid and Ask prices
+
+all update automatically and reflect actual market movements.
+
+Refresh every second using WebSockets.
+
+When the market is closed, display:
+
+"Market Closed"
+
+and freeze prices.
+
+---
+
+## 3. Trading Logic
+
+Profit and loss calculations must be accurate.
+
+Calculate:
+
+Current Value
+
+Entry Price
+
+Exit Price
+
+Quantity
+
+Realized P&L
+
+Unrealized P&L
+
+Net Profit
+
+Net Loss
+
+Brokerage = 0
+
+Use exact formulas and update instantly after each price change.
+
+---
+
+## 4. Prevent Invalid Orders
+
+Do not allow:
+
+Negative quantity
+
+Quantity equal to zero
+
+Buying without enough balance
+
+Selling non-existing positions
+
+Duplicate orders
+
+Invalid strike prices
+
+Expired contracts
+
+Show proper error messages.
+
+---
+
+## 5. Backend Validation
+
+All validations must exist both:
+
+Frontend (React)
+
+Backend (FastAPI)
+
+Never trust frontend inputs alone.
+
+---
+
+## 6. Database Constraints
+
+Users table:
+
+Email must be unique.
+
+Phone number must be unique.
+
+Null values are not allowed.
+
+Duplicate registrations are prohibited.
+
+---
+
+## 7. Market Status
+
+Show:
+
+Pre-open
+
+Open
+
+Closed
+
+Weekend
+
+Market Holiday
+
+with different colors.
+
+Disable trading when the market is closed.
+
+---
+
+## 8. Logging
+
+Store all:
+
+Orders
+
+Trades
+
+Errors
+
+Login attempts
+
+OTP attempts
+
+P&L changes
+
+in PostgreSQL.
+
+---
+
+## 9. Error Handling
+
+Never crash.
+
+Display user-friendly messages for:
+
+Network failure
+
+API failure
+
+Invalid inputs
+
+Database errors
+
+Server errors
+
+---
+
+Make the application production-ready and prevent users from entering incorrect data.

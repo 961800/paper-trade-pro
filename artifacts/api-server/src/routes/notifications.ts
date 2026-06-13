@@ -36,7 +36,7 @@ router.get("/", async (req: Request, res): Promise<void> => {
 
 router.patch("/:id/read", async (req: Request, res): Promise<void> => {
   const userId = (req as AuthReq).userId;
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
   const [updated] = await db.update(notificationsTable)
     .set({ isRead: true })
     .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, userId)))

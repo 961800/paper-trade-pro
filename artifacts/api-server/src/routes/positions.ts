@@ -60,7 +60,7 @@ router.get("/", async (req: Request, res): Promise<void> => {
 
 router.post("/:id/squareoff", async (req: Request, res): Promise<void> => {
   const userId = (req as AuthReq).userId;
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id as string);
 
   const [pos] = await db.select().from(positionsTable)
     .where(and(eq(positionsTable.id, id), eq(positionsTable.userId, userId))).limit(1);
@@ -77,7 +77,6 @@ router.post("/:id/squareoff", async (req: Request, res): Promise<void> => {
   const currentPrice = getCurrentOptionPrice(pos.symbol, parseFloat(pos.strikePrice), pos.optionType as "CE" | "PE", pos.expiry);
   const avgPrice = parseFloat(pos.averagePrice);
   const pnl = (currentPrice - avgPrice) * pos.quantity;
-  const totalReturn = currentPrice * pos.quantity + pnl;
 
   // Close position
   const [updatedPos] = await db.update(positionsTable).set({

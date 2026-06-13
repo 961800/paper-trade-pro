@@ -1,0 +1,286 @@
+CRITICAL BUG FIXES REQUIRED
+
+The application currently has major issues. Fix them and make the system production-ready.
+
+# 1. OTP Authentication
+
+Current issue:
+Users can enter any OTP and still login.
+
+Fix:
+
+* Generate a random 6-digit OTP.
+* Store OTP securely.
+* OTP expires after 5 minutes.
+* Allow maximum 3 attempts.
+* Wrong OTP must show:
+
+"Invalid OTP"
+
+* Expired OTP must show:
+
+"OTP expired"
+
+* Access to the application must be denied unless OTP verification succeeds.
+* No bypass should be possible.
+
+---
+
+# 2. Email Validation
+
+Current issue:
+Invalid email addresses are accepted.
+
+Examples that must be rejected:
+
+abc
+
+gmail.com
+
+abc@
+
+123
+
+@google.com
+
+Fix:
+
+* Use regex validation.
+* Accept only proper email formats.
+
+Show:
+
+"Please enter a valid email address."
+
+User registration must stop until a valid email is entered.
+
+---
+
+# 3. Mobile Number Validation
+
+Current issue:
+Invalid phone numbers are accepted.
+
+Accept only:
+
+10 digits
+
+Starts with 6,7,8,9
+
+Reject:
+
+1234567890
+
+abcd12345
+
+999
+
+Show:
+
+"Please enter a valid Indian mobile number."
+
+Do not create account until validation succeeds.
+
+---
+
+# 4. Market Time Logic
+
+Current issue:
+Market continues moving at night and trading is allowed when market is closed.
+
+Fix according to Indian market hours.
+
+Market Open:
+
+9:15 AM IST
+
+Market Close:
+
+3:30 PM IST
+
+Saturday:
+
+Closed
+
+Sunday:
+
+Closed
+
+Market Holidays:
+
+Closed
+
+Outside market hours:
+
+Freeze prices.
+
+Display:
+
+"MARKET CLOSED"
+
+Disable:
+
+Buy
+
+Sell
+
+Square Off
+
+Order Placement
+
+Show:
+
+Trading Disabled - Market Closed
+
+No new orders should be allowed.
+
+---
+
+# 5. Option Chain Data
+
+Current issue:
+CE and PE prices are wrong.
+
+Fix:
+
+NIFTY
+
+BANKNIFTY
+
+SENSEX
+
+FINNIFTY
+
+Strike prices
+
+Expiry dates
+
+Premiums
+
+LTP
+
+Bid price
+
+Ask price
+
+must come from real market APIs.
+
+Never use random values.
+
+---
+
+# 6. Price Updates
+
+During market hours:
+
+Update every second.
+
+Outside market hours:
+
+Do not update prices.
+
+Keep last traded price.
+
+---
+
+# 7. Backend Validation
+
+Never trust frontend inputs.
+
+Validate on backend:
+
+Email
+
+Phone
+
+OTP
+
+Quantity
+
+Balance
+
+Orders
+
+Strike price
+
+Expiry
+
+Prevent invalid requests.
+
+---
+
+# 8. Prevent Trading Errors
+
+Do not allow:
+
+Negative quantity
+
+Zero quantity
+
+Buying without balance
+
+Selling non-existing positions
+
+Expired contracts
+
+Duplicate orders
+
+Invalid strikes
+
+Show proper error messages.
+
+---
+
+# 9. Database Constraints
+
+Email must be unique.
+
+Phone number must be unique.
+
+OTP expiry timestamp must be stored.
+
+Duplicate users are prohibited.
+
+---
+
+# 10. Market Status Banner
+
+Display:
+
+PRE OPEN
+
+OPEN
+
+CLOSED
+
+WEEKEND
+
+HOLIDAY
+
+with different colors.
+
+Show current Indian time and automatically determine market status.
+
+---
+
+# 11. Time Zone
+
+Use:
+
+Asia/Kolkata
+
+Never use UTC.
+
+---
+
+# 12. System Rule
+
+No feature should work using fake values.
+
+If API data is unavailable, show:
+
+"Market data unavailable"
+
+instead of generating random numbers.
+
+Make the application behave exactly like a professional trading platform and ensure all validations are enforced both in frontend and backend.
