@@ -56,6 +56,7 @@ const registerSchema = z.object({
   age: z.number().int().min(18, "You must be at least 18 years old."),
   city: z.string().min(2, "City is required."),
   otp: z.string().length(6, "OTP must be exactly 6 digits."),
+  initialCapital: z.number().min(10000, "Minimum capital is ₹10,000.").max(10000000, "Maximum capital is ₹1,00,00,000.").optional(),
 });
 
 const loginSchema = z.object({
@@ -119,7 +120,7 @@ router.post("/register", async (req, res): Promise<void> => {
     res.status(400).json({ error: firstError });
     return;
   }
-  const { fullName, email, password, phone, age, city, otp } = parse.data;
+  const { fullName, email, password, phone, age, city, otp, initialCapital } = parse.data;
 
   // Verify OTP
   const otpEntry = otpStore.get(phone);
@@ -162,6 +163,7 @@ router.post("/register", async (req, res): Promise<void> => {
     return;
   }
 
+  const capital = Math.round(initialCapital ?? 100000).toString();
   const [user] = await db.insert(usersTable).values({
     fullName,
     email,
@@ -169,8 +171,8 @@ router.post("/register", async (req, res): Promise<void> => {
     phone,
     age,
     city,
-    balance: "100000",
-    initialCapital: "100000",
+    balance: capital,
+    initialCapital: capital,
   }).returning();
 
   const token = generateToken(user.id);

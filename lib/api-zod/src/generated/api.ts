@@ -28,6 +28,9 @@ export const registerBodyAgeMin = 18;
 export const registerBodyOtpMin = 6;
 export const registerBodyOtpMax = 6;
 
+export const registerBodyInitialCapitalMin = 10000;
+export const registerBodyInitialCapitalMax = 10000000;
+
 
 
 export const RegisterBody = zod.object({
@@ -37,7 +40,8 @@ export const RegisterBody = zod.object({
   "phone": zod.string(),
   "age": zod.number().min(registerBodyAgeMin),
   "city": zod.string(),
-  "otp": zod.string().min(registerBodyOtpMin).max(registerBodyOtpMax)
+  "otp": zod.string().min(registerBodyOtpMin).max(registerBodyOtpMax),
+  "initialCapital": zod.number().min(registerBodyInitialCapitalMin).max(registerBodyInitialCapitalMax).optional().describe('Starting virtual capital in INR (min ₹10,000 max ₹1,00,00,000)')
 })
 
 

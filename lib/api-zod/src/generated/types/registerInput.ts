@@ -21,4 +21,10 @@ export interface RegisterInput {
      * @maxLength 6
      */
   otp: string;
+  /**
+     * Starting virtual capital in INR (min ₹10,000 max ₹1,00,00,000)
+     * @minimum 10000
+     * @maximum 10000000
+     */
+  initialCapital?: number;
 }

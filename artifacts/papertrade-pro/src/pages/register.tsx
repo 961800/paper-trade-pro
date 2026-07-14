@@ -18,9 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowRight, ArrowLeft, Phone, AlertCircle, Loader2, Copy, Check } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowRight, ArrowLeft, Phone, AlertCircle, Loader2, Copy, Check, IndianRupee } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-/** Extract clean API error message */
 function extractErrorMessage(error: unknown): string {
   if (!error) return "Something went wrong.";
   const data = (error as any)?.data;
@@ -46,10 +47,29 @@ const registerSchema = z.object({
   phone: z.string().regex(phoneRegex, "Please enter a valid Indian mobile number (10 digits, starts with 6-9)."),
   age: z.coerce.number().int().min(18, "You must be at least 18 years old."),
   city: z.string().min(2, "City is required."),
+  initialCapital: z.coerce.number()
+    .min(10000, "Minimum capital is ₹10,000.")
+    .max(10000000, "Maximum capital is ₹1,00,00,000."),
   otp: z.string().length(6, "OTP must be exactly 6 digits."),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
+
+const CAPITAL_PRESETS = [
+  { label: "₹10K",   value: 10000 },
+  { label: "₹25K",   value: 25000 },
+  { label: "₹50K",   value: 50000 },
+  { label: "₹1 Lakh", value: 100000 },
+  { label: "₹5 Lakh", value: 500000 },
+  { label: "Custom",  value: 0 },
+];
+
+function formatINR(n: number): string {
+  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)} Cr`;
+  if (n >= 100000)   return `₹${(n / 100000).toFixed(n % 100000 === 0 ? 0 : 1)} L`;
+  if (n >= 1000)     return `₹${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K`;
+  return `₹${n}`;
+}
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -63,11 +83,30 @@ export default function Register() {
   const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [otpSentPhone, setOtpSentPhone] = useState<string | null>(null);
+  const [isCustomCapital, setIsCustomCapital] = useState(false);
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { fullName: "", email: "", password: "", phone: "", age: 18, city: "", otp: "" },
+    defaultValues: {
+      fullName: "", email: "", password: "",
+      phone: "", age: 18, city: "",
+      initialCapital: 100000,
+      otp: "",
+    },
   });
+
+  const capital = form.watch("initialCapital");
+
+  const selectPreset = (value: number) => {
+    if (value === 0) {
+      setIsCustomCapital(true);
+      form.setValue("initialCapital", 100000);
+    } else {
+      setIsCustomCapital(false);
+      form.setValue("initialCapital", value);
+      form.clearErrors("initialCapital");
+    }
+  };
 
   const copyOtp = () => {
     if (!demoOtp) return;
@@ -83,7 +122,10 @@ export default function Register() {
     try {
       const res = await registerMutation.mutateAsync({ data });
       login(res.token, res.user);
-      toast({ title: "Account created!", description: "₹1,00,000 virtual capital credited. Happy trading!" });
+      toast({
+        title: "Account created!",
+        description: `${formatINR(data.initialCapital)} virtual capital credited. Happy trading!`,
+      });
       setLocation("/dashboard");
     } catch (error: unknown) {
       setFormError(extractErrorMessage(error));
@@ -98,9 +140,8 @@ export default function Register() {
 
   const sendOtp = async () => {
     setFormError(null);
-    const ok = await form.trigger(["phone", "age", "city"]);
+    const ok = await form.trigger(["phone", "age", "city", "initialCapital"]);
     if (!ok) return;
-
     const phone = form.getValues("phone");
     try {
       const res = await sendOtpMutation.mutateAsync({ data: { phone } });
@@ -141,17 +182,19 @@ export default function Register() {
           </CardTitle>
           <CardDescription>
             {step === 1 ? "Create your virtual trading account"
-              : step === 2 ? "Complete your trader profile"
+              : step === 2 ? "Set up your profile & starting capital"
               : "Verify your phone number"}
           </CardDescription>
 
-          <div className="flex justify-center gap-2 mt-4">
+          <div className="flex justify-center gap-2 mt-3">
             {stepLabels.map((label, i) => (
               <div key={i} className="flex flex-col items-center gap-1">
                 <div className={`h-1.5 w-12 rounded-full transition-colors ${
                   step > i ? "bg-primary" : step === i + 1 ? "bg-primary/70" : "bg-muted"
                 }`} />
-                <span className={`text-[10px] ${step === i + 1 ? "text-primary font-medium" : "text-muted-foreground"}`}>{label}</span>
+                <span className={`text-[10px] ${step === i + 1 ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                  {label}
+                </span>
               </div>
             ))}
           </div>
@@ -206,7 +249,7 @@ export default function Register() {
                 </div>
               )}
 
-              {/* ── Step 2: Profile ── */}
+              {/* ── Step 2: Profile + Capital ── */}
               {step === 2 && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                   <FormField control={form.control} name="phone" render={({ field }) => (
@@ -227,6 +270,7 @@ export default function Register() {
                       <FormMessage />
                     </FormItem>
                   )} />
+
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={form.control} name="age" render={({ field }) => (
                       <FormItem>
@@ -243,6 +287,80 @@ export default function Register() {
                       </FormItem>
                     )} />
                   </div>
+
+                  {/* Capital Selector */}
+                  <FormField control={form.control} name="initialCapital" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <IndianRupee className="w-3.5 h-3.5" />
+                        Starting Virtual Capital
+                      </FormLabel>
+
+                      {/* Preset chips */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {CAPITAL_PRESETS.map((preset) => {
+                          const isSelected = preset.value === 0
+                            ? isCustomCapital
+                            : !isCustomCapital && field.value === preset.value;
+                          return (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => selectPreset(preset.value)}
+                              className={cn(
+                                "rounded-lg border px-2 py-2 text-sm font-medium transition-all text-center",
+                                isSelected
+                                  ? "border-primary bg-primary/15 text-primary ring-1 ring-primary"
+                                  : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-muted/50"
+                              )}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Custom input */}
+                      {isCustomCapital && (
+                        <FormControl>
+                          <div className="relative mt-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">₹</span>
+                            <Input
+                              type="number"
+                              placeholder="Enter amount (e.g. 75000)"
+                              className="pl-7"
+                              min={10000}
+                              max={10000000}
+                              {...field}
+                              onChange={e => {
+                                setFormError(null);
+                                field.onChange(e.target.valueAsNumber || 0);
+                              }}
+                            />
+                          </div>
+                        </FormControl>
+                      )}
+                      <FormMessage />
+
+                      {/* Preview */}
+                      {!isNaN(capital) && capital >= 10000 && (
+                        <div className="flex items-center justify-between rounded-lg bg-muted/50 border border-border px-3 py-2 mt-1">
+                          <span className="text-xs text-muted-foreground">Your starting capital</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-primary font-mono">
+                              ₹{capital.toLocaleString("en-IN")}
+                            </span>
+                            {capital >= 100000 && (
+                              <Badge variant="outline" className="text-[10px] text-green-500 border-green-500/40 bg-green-500/10">
+                                {formatINR(capital)}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </FormItem>
+                  )} />
+
                   <div className="flex gap-3 mt-2">
                     <Button type="button" variant="outline" className="flex-1" onClick={() => setStep(1)}>
                       <ArrowLeft className="w-4 h-4 mr-2" /> Back
@@ -259,11 +377,30 @@ export default function Register() {
               {/* ── Step 3: OTP ── */}
               {step === 3 && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                  {/* Demo OTP Banner — very prominent */}
+                  {/* Capital confirmation */}
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Starting capital confirmed</p>
+                      <p className="font-bold text-primary font-mono text-lg">
+                        ₹{(capital || 100000).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-primary underline"
+                      onClick={() => setStep(2)}
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  {/* Demo OTP Banner */}
                   {demoOtp && (
                     <div className="rounded-xl border-2 border-primary bg-primary/10 p-4">
                       <div className="flex items-center justify-between mb-1">
-                        <p className="text-xs font-semibold text-primary uppercase tracking-wider">Demo Mode — Your OTP</p>
+                        <p className="text-xs font-semibold text-primary uppercase tracking-wider">
+                          Demo Mode — Your OTP
+                        </p>
                         <Button
                           type="button"
                           variant="ghost"
@@ -271,7 +408,9 @@ export default function Register() {
                           className="h-6 px-2 text-xs text-primary hover:bg-primary/20"
                           onClick={copyOtp}
                         >
-                          {copied ? <><Check className="w-3 h-3 mr-1" /> Copied!</> : <><Copy className="w-3 h-3 mr-1" /> Copy & fill</>}
+                          {copied
+                            ? <><Check className="w-3 h-3 mr-1" /> Copied!</>
+                            : <><Copy className="w-3 h-3 mr-1" /> Copy & fill</>}
                         </Button>
                       </div>
                       <p className="text-4xl font-bold font-mono tracking-[0.35em] text-primary text-center py-1">
@@ -297,7 +436,10 @@ export default function Register() {
                           maxLength={6}
                           className="text-center text-2xl font-mono tracking-[0.4em] h-12"
                           {...field}
-                          onChange={e => { setFormError(null); field.onChange(e.target.value.replace(/\D/g, "")); }}
+                          onChange={e => {
+                            setFormError(null);
+                            field.onChange(e.target.value.replace(/\D/g, ""));
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
