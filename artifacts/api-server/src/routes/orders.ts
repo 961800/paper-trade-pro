@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { ordersTable, positionsTable, tradesTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { getCurrentOptionPrice, getMarketStatus } from "../lib/market-simulator";
+import { getCurrentOptionPrice, getMarketStatus } from "../lib/upstox-client";
 import { z } from "zod";
 
 const router = Router();
@@ -98,7 +98,7 @@ router.post("/", async (req: Request, res): Promise<void> => {
     return;
   }
 
-  const currentPrice = getCurrentOptionPrice(symbol, strikePrice, optionType as "CE" | "PE", expiry);
+  const currentPrice = await getCurrentOptionPrice(symbol, strikePrice, optionType as "CE" | "PE", expiry);
   const executionPrice = orderType === "market" ? currentPrice : (limitPrice ?? currentPrice);
   const currentBalance = parseFloat(user.balance);
 
