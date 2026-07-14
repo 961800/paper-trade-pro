@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { positionsTable, tradesTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { getCurrentOptionPrice } from "../lib/market-simulator";
+import { getCurrentOptionPrice } from "../lib/upstox-client";
 
 const router = Router();
 
@@ -15,7 +15,7 @@ interface AuthReq extends Request {
 function serializePosition(pos: typeof positionsTable.$inferSelect) {
   const avgPrice = parseFloat(pos.averagePrice);
   const currentPrice = parseFloat(pos.currentPrice);
-  const unrealizedPnl = (currentPrice - avgPrice) * pos.quantity;
+  const unrealizedPnl = pos.status === "open" ? (currentPrice - avgPrice) * pos.quantity : 0;
   return {
     id: pos.id,
     userId: pos.userId,
@@ -34,6 +34,47 @@ function serializePosition(pos: typeof positionsTable.$inferSelect) {
   };
 }
 
+/** Settle expired options at ₹0 (expire worthless) */
+async function settleExpiredPosition(pos: typeof positionsTable.$inferSelect, userId: number): Promise<typeof positionsTable.$inferSelect> {
+  const expiredPrice = 0;
+  const avgPrice = parseFloat(pos.averagePrice);
+  const pnl = (expiredPrice - avgPrice) * pos.quantity;
+
+  const [updated] = await db.update(positionsTable).set({
+    status: "closed",
+    currentPrice: "0",
+    pnl: pnl.toString(),
+    unrealizedPnl: "0",
+    closedAt: new Date(),
+  }).where(eq(positionsTable.id, pos.id)).returning();
+
+  // Record the expiry trade
+  await db.insert(tradesTable).values({
+    userId,
+    symbol: pos.symbol,
+    strikePrice: pos.strikePrice,
+    optionType: pos.optionType,
+    action: "sell",
+    quantity: pos.quantity,
+    entryPrice: pos.averagePrice,
+    exitPrice: "0",
+    pnl: pnl.toString(),
+    status: "closed",
+    expiry: pos.expiry,
+    closedAt: new Date(),
+  });
+
+  await db.insert(notificationsTable).values({
+    userId,
+    type: "stop_loss",
+    title: "Option Expired Worthless",
+    message: `${pos.symbol} ${pos.strikePrice} ${pos.optionType} expired on ${pos.expiry} at ₹0. Loss: ₹${Math.abs(pnl).toFixed(2)}`,
+    isRead: false,
+  });
+
+  return updated;
+}
+
 router.use(requireAuth);
 
 router.get("/", async (req: Request, res): Promise<void> => {
@@ -46,16 +87,30 @@ router.get("/", async (req: Request, res): Promise<void> => {
       : eq(positionsTable.userId, userId))
     .orderBy(desc(positionsTable.createdAt));
 
-  // Update current prices for open positions
-  const updated = positions.map((pos) => {
-    if (pos.status === "open") {
-      const currentPrice = getCurrentOptionPrice(pos.symbol, parseFloat(pos.strikePrice), pos.optionType as "CE" | "PE", pos.expiry);
-      return { ...pos, currentPrice: currentPrice.toString() };
-    }
-    return pos;
-  });
+  const today = new Date().toISOString().split("T")[0];
 
-  res.json(updated.map(serializePosition));
+  // Resolve all open positions in parallel: check expiry + fetch live price
+  const resolved = await Promise.all(
+    positions.map(async (pos) => {
+      if (pos.status !== "open") return pos;
+
+      // Auto-settle if expiry has passed
+      if (pos.expiry < today) {
+        return settleExpiredPosition(pos, userId);
+      }
+
+      // Fetch live price from Upstox (falls back to simulator)
+      const livePrice = await getCurrentOptionPrice(
+        pos.symbol,
+        parseFloat(pos.strikePrice),
+        pos.optionType as "CE" | "PE",
+        pos.expiry,
+      );
+      return { ...pos, currentPrice: livePrice.toString() };
+    })
+  );
+
+  res.json(resolved.map(serializePosition));
 });
 
 router.post("/:id/squareoff", async (req: Request, res): Promise<void> => {
@@ -74,11 +129,25 @@ router.post("/:id/squareoff", async (req: Request, res): Promise<void> => {
     return;
   }
 
-  const currentPrice = getCurrentOptionPrice(pos.symbol, parseFloat(pos.strikePrice), pos.optionType as "CE" | "PE", pos.expiry);
+  const today = new Date().toISOString().split("T")[0];
+
+  // If option already expired, settle at 0
+  if (pos.expiry < today) {
+    const settled = await settleExpiredPosition(pos, userId);
+    res.json(serializePosition(settled));
+    return;
+  }
+
+  // Fetch live Upstox price for square-off
+  const currentPrice = await getCurrentOptionPrice(
+    pos.symbol,
+    parseFloat(pos.strikePrice),
+    pos.optionType as "CE" | "PE",
+    pos.expiry,
+  );
   const avgPrice = parseFloat(pos.averagePrice);
   const pnl = (currentPrice - avgPrice) * pos.quantity;
 
-  // Close position
   const [updatedPos] = await db.update(positionsTable).set({
     status: "closed",
     currentPrice: currentPrice.toString(),
@@ -107,7 +176,6 @@ router.post("/:id/squareoff", async (req: Request, res): Promise<void> => {
     closedAt: new Date(),
   });
 
-  // Notification
   const pnlText = pnl >= 0 ? `+₹${pnl.toFixed(2)}` : `-₹${Math.abs(pnl).toFixed(2)}`;
   await db.insert(notificationsTable).values({
     userId,
