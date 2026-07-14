@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,61 +17,81 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 
 const loginSchema = z.object({
-  email: z.string().email({ message: "Invalid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+  email: z.string()
+    .min(1, "Email is required.")
+    .email("Please enter a valid email address."),
+  password: z.string()
+    .min(1, "Password is required.")
+    .min(6, "Password must be at least 6 characters."),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
+
+/** Extract a clean human-readable message from an API error */
+function extractErrorMessage(error: unknown): string {
+  if (!error) return "Something went wrong. Please try again.";
+  // ApiError has a `data` property with the parsed JSON body
+  const data = (error as any)?.data;
+  if (data?.error)   return data.error;
+  if (data?.message) return data.message;
+  // Fall back to error.message but strip the "HTTP 4xx StatusText: " prefix
+  const msg = (error as any)?.message ?? "";
+  const colonIdx = msg.indexOf(": ");
+  if (colonIdx !== -1 && msg.startsWith("HTTP ")) return msg.slice(colonIdx + 2);
+  return msg || "Invalid email or password.";
+}
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
   const loginMutation = useLogin();
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
 
   const onSubmit = async (data: LoginFormValues) => {
+    setLoginError(null);
     try {
       const res = await loginMutation.mutateAsync({ data });
       login(res.token, res.user);
-      toast({
-        title: "Login successful",
-        description: "Welcome back to PaperTrade Pro",
-      });
+      toast({ title: "Welcome back!", description: `Logged in as ${res.user.fullName}` });
       setLocation("/dashboard");
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Login failed",
-        description: error.message || "Please check your credentials and try again.",
-      });
+    } catch (error: unknown) {
+      const msg = extractErrorMessage(error);
+      setLoginError(msg);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
       <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/20 via-background to-background" />
-      
+
       <Card className="w-full max-w-md z-10 border-border/50 shadow-2xl backdrop-blur-sm bg-card/90">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-3xl font-bold tracking-tight text-primary">PaperTrade<span className="text-foreground">Pro</span></CardTitle>
-          <CardDescription>
-            Enter your credentials to access your trading cockpit
-          </CardDescription>
+          <CardTitle className="text-3xl font-bold tracking-tight">
+            <span className="text-primary">PaperTrade</span><span className="text-foreground">Pro</span>
+          </CardTitle>
+          <CardDescription>Enter your credentials to access your trading cockpit</CardDescription>
         </CardHeader>
+
         <CardContent>
+          {loginError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="ml-2 font-medium">{loginError}</AlertDescription>
+            </Alert>
+          )}
+
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
               <FormField
                 control={form.control}
                 name="email"
@@ -79,7 +99,13 @@ export default function Login() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="trader@example.com" {...field} />
+                      <Input
+                        placeholder="trader@example.com"
+                        type="email"
+                        autoComplete="email"
+                        {...field}
+                        onChange={(e) => { setLoginError(null); field.onChange(e); }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -92,23 +118,37 @@ export default function Login() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        autoComplete="current-password"
+                        {...field}
+                        onChange={(e) => { setLoginError(null); field.onChange(e); }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full mt-6" disabled={loginMutation.isPending}>
-                {loginMutation.isPending ? "Authenticating..." : "Login to Terminal"}
+
+              <Button
+                type="submit"
+                className="w-full mt-6"
+                disabled={loginMutation.isPending}
+              >
+                {loginMutation.isPending
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Authenticating...</>
+                  : "Login to Terminal"}
               </Button>
             </form>
           </Form>
         </CardContent>
+
         <CardFooter className="flex justify-center border-t p-4 mt-4">
           <p className="text-sm text-muted-foreground">
             Don't have an account?{" "}
             <Link href="/register">
-              <span className="text-primary hover:underline cursor-pointer font-medium flex items-center inline-flex gap-1">
+              <span className="text-primary hover:underline cursor-pointer font-medium inline-flex items-center gap-1">
                 Open Paper Account <ArrowRight className="w-3 h-3" />
               </span>
             </Link>
