@@ -7,38 +7,26 @@ import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowRight, AlertCircle, Loader2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { ArrowRight, AlertCircle, Loader2, LogIn } from "lucide-react";
 
 const loginSchema = z.object({
-  email: z.string()
-    .min(1, "Email is required.")
-    .email("Please enter a valid email address."),
-  password: z.string()
-    .min(1, "Password is required.")
-    .min(6, "Password must be at least 6 characters."),
+  email: z.string().min(1, "Email is required.").email("Please enter a valid email address."),
+  password: z.string().min(1, "Password is required.").min(6, "Password must be at least 6 characters."),
 });
-
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-/** Extract a clean human-readable message from an API error */
 function extractErrorMessage(error: unknown): string {
   if (!error) return "Something went wrong. Please try again.";
-  // ApiError has a `data` property with the parsed JSON body
   const data = (error as any)?.data;
-  if (data?.error)   return data.error;
+  if (data?.error) return data.error;
   if (data?.message) return data.message;
-  // Fall back to error.message but strip the "HTTP 4xx StatusText: " prefix
   const msg = (error as any)?.message ?? "";
   const colonIdx = msg.indexOf(": ");
   if (colonIdx !== -1 && msg.startsWith("HTTP ")) return msg.slice(colonIdx + 2);
@@ -47,7 +35,7 @@ function extractErrorMessage(error: unknown): string {
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login } = useAuth();
+  const { login, refreshUser } = useAuth();
   const { toast } = useToast();
   const loginMutation = useLogin();
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -61,12 +49,11 @@ export default function Login() {
     setLoginError(null);
     try {
       const res = await loginMutation.mutateAsync({ data });
-      login(res.token, res.user);
+      refreshUser();
       toast({ title: "Welcome back!", description: `Logged in as ${res.user.fullName}` });
       setLocation("/dashboard");
     } catch (error: unknown) {
-      const msg = extractErrorMessage(error);
-      setLoginError(msg);
+      setLoginError(extractErrorMessage(error));
     }
   };
 
@@ -79,12 +66,29 @@ export default function Login() {
           <CardTitle className="text-3xl font-bold tracking-tight">
             <span className="text-primary">PaperTrade</span><span className="text-foreground">Pro</span>
           </CardTitle>
-          <CardDescription>Enter your credentials to access your trading cockpit</CardDescription>
+          <CardDescription>Enter your trading cockpit</CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Replit Auth — primary sign-in */}
+          <Button
+            variant="default"
+            className="w-full flex items-center gap-2"
+            onClick={login}
+          >
+            <LogIn className="w-4 h-4" />
+            Sign in
+          </Button>
+
+          <div className="relative">
+            <Separator />
+            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+              or continue with email
+            </span>
+          </div>
+
           {loginError && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="ml-2 font-medium">{loginError}</AlertDescription>
             </Alert>
@@ -130,12 +134,7 @@ export default function Login() {
                   </FormItem>
                 )}
               />
-
-              <Button
-                type="submit"
-                className="w-full mt-6"
-                disabled={loginMutation.isPending}
-              >
+              <Button type="submit" className="w-full" variant="outline" disabled={loginMutation.isPending}>
                 {loginMutation.isPending
                   ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Authenticating...</>
                   : "Login to Terminal"}
@@ -144,9 +143,9 @@ export default function Login() {
           </Form>
         </CardContent>
 
-        <CardFooter className="flex justify-center border-t p-4 mt-4">
+        <CardFooter className="flex justify-center border-t p-4">
           <p className="text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            New user?{" "}
             <Link href="/register">
               <span className="text-primary hover:underline cursor-pointer font-medium inline-flex items-center gap-1">
                 Open Paper Account <ArrowRight className="w-3 h-3" />

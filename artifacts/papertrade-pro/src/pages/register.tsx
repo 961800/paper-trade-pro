@@ -73,7 +73,7 @@ function formatINR(n: number): string {
 
 export default function Register() {
   const [, setLocation] = useLocation();
-  const { login } = useAuth();
+  const { refreshUser } = useAuth();
   const { toast } = useToast();
   const registerMutation = useRegister();
   const sendOtpMutation = useSendOtp();
@@ -121,7 +121,7 @@ export default function Register() {
     setFormError(null);
     try {
       const res = await registerMutation.mutateAsync({ data });
-      login(res.token, res.user);
+      refreshUser();
       toast({
         title: "Account created!",
         description: `${formatINR(data.initialCapital)} virtual capital credited. Happy trading!`,

@@ -4,3 +4,4 @@ export * from "./positions";
 export * from "./trades";
 export * from "./watchlist";
 export * from "./notifications";
+export * from "./auth";
