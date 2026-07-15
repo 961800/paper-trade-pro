@@ -48,7 +48,7 @@ const FULL_NAME: Record<string, string> = {
 
 // Lot sizes (updated per NSE/BSE circular — verified from live Upstox contracts)
 const LOT_SIZE: Record<string, number> = {
-  NIFTY:     75,
+  NIFTY:     65,
   BANKNIFTY: 30,
   SENSEX:    10,
   FINNIFTY:  65,
