@@ -740,7 +740,7 @@ components:
 
     User:
       type: object
-      required: [id, fullName, email, phone, age, city, balance, initialCapital, createdAt]
+      required: [id, fullName, email, phone, age, city, balance, initialCapital, portfolioValue, createdAt]
       properties:
         id:
           type: integer
@@ -756,8 +756,13 @@ components:
           type: string
         balance:
           type: number
+          description: Available cash balance
         initialCapital:
           type: number
+          description: Capital selected at account creation
+        portfolioValue:
+          type: number
+          description: Total portfolio value — cash balance plus current market value of all open positions
         stopLossLimit:
           type: ["number", "null"]
         targetPrice:

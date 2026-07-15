@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { usersTable, positionsTable } from "@workspace/db";
+import { eq, or, and } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 import { createSession, setSessionCookie } from "../lib/auth";
@@ -19,7 +19,19 @@ const phoneRegex = /^[6-9]\d{9}$/;
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const fullNameRegex = /^[a-zA-Z\s]+$/;
 
-export function serializeUser(user: typeof usersTable.$inferSelect) {
+export async function serializeUser(user: typeof usersTable.$inferSelect) {
+  const openPositions = await db
+    .select({ currentPrice: positionsTable.currentPrice, quantity: positionsTable.quantity })
+    .from(positionsTable)
+    .where(and(eq(positionsTable.userId, user.id), eq(positionsTable.status, "open")));
+
+  const openPositionsMarketValue = openPositions.reduce(
+    (sum, p) => sum + parseFloat(p.currentPrice) * p.quantity,
+    0,
+  );
+  const balance = parseFloat(user.balance);
+  const portfolioValue = Math.round((balance + openPositionsMarketValue) * 100) / 100;
+
   return {
     id: user.id,
     fullName: user.fullName,
@@ -27,8 +39,9 @@ export function serializeUser(user: typeof usersTable.$inferSelect) {
     phone: user.phone ?? null,
     age: user.age ?? null,
     city: user.city ?? null,
-    balance: parseFloat(user.balance),
+    balance,
     initialCapital: parseFloat(user.initialCapital),
+    portfolioValue,
     stopLossLimit: user.stopLossLimit ? parseFloat(user.stopLossLimit) : null,
     targetPrice: user.targetPrice ? parseFloat(user.targetPrice) : null,
     maxDailyLoss: user.maxDailyLoss ? parseFloat(user.maxDailyLoss) : null,
@@ -37,12 +50,12 @@ export function serializeUser(user: typeof usersTable.$inferSelect) {
 }
 
 // GET /auth/me — session-based
-router.get("/me", (req, res): void => {
+router.get("/me", async (req, res): Promise<void> => {
   if (!req.isAuthenticated() || !req.user) {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  res.json(serializeUser(req.user));
+  res.json(await serializeUser(req.user));
 });
 
 // POST /auth/send-otp
@@ -107,7 +120,7 @@ router.post("/register", async (req, res): Promise<void> => {
 
   const sid = await createSession({ userId: user.id });
   setSessionCookie(res, sid);
-  res.status(201).json({ user: serializeUser(user), token: sid });
+  res.status(201).json({ user: await serializeUser(user), token: sid });
 });
 
 // POST /auth/login
@@ -122,7 +135,7 @@ router.post("/login", async (req, res): Promise<void> => {
   }
   const sid = await createSession({ userId: user.id });
   setSessionCookie(res, sid);
-  res.json({ user: serializeUser(user), token: sid });
+  res.json({ user: await serializeUser(user), token: sid });
 });
 
 // POST /auth/logout

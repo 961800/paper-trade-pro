@@ -13,8 +13,12 @@ export interface User {
   phone: string;
   age: number;
   city: string;
+  /** Available cash balance */
   balance: number;
+  /** Capital selected at account creation */
   initialCapital: number;
+  /** Total portfolio value — cash balance plus current market value of all open positions */
+  portfolioValue: number;
   /** @nullable */
   stopLossLimit?: number | null;
   /** @nullable */

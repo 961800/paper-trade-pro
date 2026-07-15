@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PnLBadge } from "@/components/pnl-badge";
-import { User, Shield, TrendingUp } from "lucide-react";
+import { User, Shield, Wallet, TrendingUp, Landmark } from "lucide-react";
 
 export default function Profile() {
   const { user } = useAuth();
@@ -47,7 +47,12 @@ export default function Profile() {
 
   if (!user) return null;
 
-  const totalReturn = ((user.balance - user.initialCapital) / user.initialCapital) * 100;
+  const totalReturn = ((user.portfolioValue - user.initialCapital) / user.initialCapital) * 100;
+  const pnlAbs = user.portfolioValue - user.initialCapital;
+
+  function fmt(n: number) {
+    return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  }
 
   return (
     <Layout>
@@ -57,20 +62,56 @@ export default function Profile() {
           <p className="text-muted-foreground text-sm">Manage your details and risk settings</p>
         </div>
 
-        {/* Stats */}
+        {/* Primary portfolio cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="rounded-md bg-primary/10 p-2 mt-0.5">
+                <TrendingUp className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Portfolio Value</p>
+                <p className="text-xl font-bold tracking-tight">{fmt(user.portfolioValue)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Cash + open positions</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="rounded-md bg-muted p-2 mt-0.5">
+                <Landmark className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Initial Capital</p>
+                <p className="text-xl font-bold tracking-tight">{fmt(user.initialCapital)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Selected at registration</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Secondary stats */}
         <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Current Balance", value: `₹${user.balance.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` },
-            { label: "Initial Capital", value: `₹${user.initialCapital.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` },
-            { label: "Total Return", value: <PnLBadge amount={user.balance - user.initialCapital} showPercent percentValue={totalReturn} /> },
-          ].map(({ label, value }) => (
-            <Card key={label}>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <div className="mt-1 font-bold">{value}</div>
-              </CardContent>
-            </Card>
-          ))}
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><Wallet className="w-3 h-3" /> Cash Balance</p>
+              <div className="mt-1 font-bold">{fmt(user.balance)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Unrealized in Positions</p>
+              <div className="mt-1 font-bold">{fmt(user.portfolioValue - user.balance)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Overall Return</p>
+              <div className="mt-1">
+                <PnLBadge amount={pnlAbs} showPercent percentValue={totalReturn} />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Personal Info */}
