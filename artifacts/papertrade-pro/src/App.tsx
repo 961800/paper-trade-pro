@@ -21,6 +21,7 @@ import Analytics from "@/pages/analytics";
 import Notifications from "@/pages/notifications";
 import Profile from "@/pages/profile";
 import Settings from "@/pages/settings";
+import AdminUsers from "@/pages/admin-users";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/notifications"><ProtectedRoute component={Notifications} /></Route>
       <Route path="/profile"><ProtectedRoute component={Profile} /></Route>
       <Route path="/settings"><ProtectedRoute component={Settings} /></Route>
+      <Route path="/admin/users"><ProtectedRoute component={AdminUsers} /></Route>
       
       <Route component={NotFound} />
     </Switch>

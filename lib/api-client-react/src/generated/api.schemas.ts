@@ -85,6 +85,25 @@ export interface AuthResponse {
   token: string;
 }
 
+export interface AdminUser {
+  id: number;
+  fullName: string;
+  email: string;
+  phone?: string;
+  city?: string;
+  /** Available cash balance */
+  balance: number;
+  /** Capital selected at account creation */
+  initialCapital: number;
+  /** Cash + current market value of open positions */
+  portfolioValue: number;
+  /** portfolioValue minus initialCapital */
+  totalPnl: number;
+  /** Number of currently open positions */
+  openPositionsCount: number;
+  createdAt: string;
+}
+
 export interface IndexQuote {
   symbol: string;
   name: string;
@@ -465,6 +484,10 @@ export interface OtpResponse {
   /** Demo only: OTP returned in response since no SMS provider is configured */
   otp?: string;
 }
+
+export type GetAdminUsers200 = {
+  users: AdminUser[];
+};
 
 export type GetOptionsChainParams = {
 symbol: string;

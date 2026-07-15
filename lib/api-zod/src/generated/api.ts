@@ -9,6 +9,26 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary List all users with portfolio values (admin)
+ */
+export const GetAdminUsersResponse = zod.object({
+  "users": zod.array(zod.object({
+  "id": zod.number(),
+  "fullName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().optional(),
+  "city": zod.string().optional(),
+  "balance": zod.number().describe('Available cash balance'),
+  "initialCapital": zod.number().describe('Capital selected at account creation'),
+  "portfolioValue": zod.number().describe('Cash + current market value of open positions'),
+  "totalPnl": zod.number().describe('portfolioValue minus initialCapital'),
+  "openPositionsCount": zod.number().describe('Number of currently open positions'),
+  "createdAt": zod.string()
+}))
+})
+
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({

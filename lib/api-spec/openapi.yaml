@@ -31,6 +31,27 @@ tags:
   - name: analytics
     description: Analytics and performance metrics
 paths:
+  /admin/users:
+    get:
+      operationId: getAdminUsers
+      tags: [admin]
+      summary: List all users with portfolio values (admin)
+      responses:
+        "200":
+          description: All users with portfolio data
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminUser"
+        "401":
+          description: Not authenticated
+
   /healthz:
     get:
       operationId: healthCheck
@@ -769,6 +790,38 @@ components:
           type: ["number", "null"]
         maxDailyLoss:
           type: ["number", "null"]
+        createdAt:
+          type: string
+
+    AdminUser:
+      type: object
+      required: [id, fullName, email, balance, initialCapital, portfolioValue, totalPnl, openPositionsCount, createdAt]
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        balance:
+          type: number
+          description: Available cash balance
+        initialCapital:
+          type: number
+          description: Capital selected at account creation
+        portfolioValue:
+          type: number
+          description: Cash + current market value of open positions
+        totalPnl:
+          type: number
+          description: portfolioValue minus initialCapital
+        openPositionsCount:
+          type: integer
+          description: Number of currently open positions
         createdAt:
           type: string
 
