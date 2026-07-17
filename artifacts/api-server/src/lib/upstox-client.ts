@@ -3,7 +3,14 @@
  * Falls back to the simulator when the API is unavailable or returns no data.
  */
 
-import { getMarketStatus, getIndexQuote, getAllIndices as simGetAllIndices, getOptionsChain as simGetOptionsChain, getExpiries as simGetExpiries, getCurrentOptionPrice as simGetCurrentOptionPrice } from "./market-simulator";
+import {
+  getMarketStatus,
+  getIndexQuote,
+  getAllIndices as simGetAllIndices,
+  getOptionsChain as simGetOptionsChain,
+  getExpiries as simGetExpiries,
+  getCurrentOptionPrice as simGetCurrentOptionPrice,
+} from "./market-simulator";
 import type { IndexData, OptionContract } from "./market-simulator";
 
 const BASE = "https://api.upstox.com/v2";
@@ -33,31 +40,38 @@ async function upstoxFetch<T>(path: string): Promise<T | null> {
 
 // ── Instrument key mapping ──────────────────────────────────────────────────
 const INSTRUMENT_KEY: Record<string, string> = {
-  NIFTY:     "NSE_INDEX|Nifty 50",
+  NIFTY: "NSE_INDEX|Nifty 50",
   BANKNIFTY: "NSE_INDEX|Nifty Bank",
-  SENSEX:    "BSE_INDEX|SENSEX",
-  FINNIFTY:  "NSE_INDEX|Nifty Fin Service",
+  SENSEX: "BSE_INDEX|SENSEX",
+  FINNIFTY: "NSE_INDEX|Nifty Fin Service",
 };
 
 const FULL_NAME: Record<string, string> = {
-  NIFTY:     "NIFTY 50",
+  NIFTY: "NIFTY 50",
   BANKNIFTY: "BANK NIFTY",
-  SENSEX:    "SENSEX",
-  FINNIFTY:  "FINNIFTY",
+  SENSEX: "SENSEX",
+  FINNIFTY: "FINNIFTY",
 };
 
 // Lot sizes (updated per NSE/BSE circular — verified from live Upstox contracts)
 const LOT_SIZE: Record<string, number> = {
-  NIFTY:     65,
+  NIFTY: 65,
   BANKNIFTY: 30,
-  SENSEX:    10,
-  FINNIFTY:  65,
+  SENSEX: 20,
+  FINNIFTY: 60,
 };
 
 // ── Cache ───────────────────────────────────────────────────────────────────
-interface CacheEntry<T> { data: T; ts: number }
+interface CacheEntry<T> {
+  data: T;
+  ts: number;
+}
 
-function cached<T>(store: Map<string, CacheEntry<T>>, key: string, ttlMs: number): T | null {
+function cached<T>(
+  store: Map<string, CacheEntry<T>>,
+  key: string,
+  ttlMs: number,
+): T | null {
   const entry = store.get(key);
   if (entry && Date.now() - entry.ts < ttlMs) return entry.data;
   return null;
@@ -68,29 +82,62 @@ function cache<T>(store: Map<string, CacheEntry<T>>, key: string, data: T): T {
   return data;
 }
 
-const indicesCache  = new Map<string, CacheEntry<IndexData[]>>();
-const ohlcCache     = new Map<string, CacheEntry<{ open: number; high: number; low: number; close: number; prevClose: number }>>();
+const indicesCache = new Map<string, CacheEntry<IndexData[]>>();
+const ohlcCache = new Map<
+  string,
+  CacheEntry<{
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    prevClose: number;
+  }>
+>();
 const expiriesCache = new Map<string, CacheEntry<string[]>>();
-const chainCache    = new Map<string, CacheEntry<{ symbol: string; expiry: string; underlyingPrice: number; options: OptionContract[] }>>();
-const priceCache    = new Map<string, CacheEntry<number>>();
+const chainCache = new Map<
+  string,
+  CacheEntry<{
+    symbol: string;
+    expiry: string;
+    underlyingPrice: number;
+    options: OptionContract[];
+  }>
+>();
+const priceCache = new Map<string, CacheEntry<number>>();
 
 // ── Upstox LTP → IndexData ──────────────────────────────────────────────────
-async function fetchOhlc(symbol: string): Promise<{ open: number; high: number; low: number; close: number; prevClose: number } | null> {
+async function fetchOhlc(
+  symbol: string,
+): Promise<{
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  prevClose: number;
+} | null> {
   const hit = cached(ohlcCache, symbol, 5000);
   if (hit) return hit;
 
   const key = encodeURIComponent(INSTRUMENT_KEY[symbol]);
-  const data = await upstoxFetch<Record<string, { ohlc: { open: number; high: number; low: number; close: number }; last_price: number }>>(`/market-quote/ohlc?instrument_key=${key}&interval=1d`);
+  const data = await upstoxFetch<
+    Record<
+      string,
+      {
+        ohlc: { open: number; high: number; low: number; close: number };
+        last_price: number;
+      }
+    >
+  >(`/market-quote/ohlc?instrument_key=${key}&interval=1d`);
   if (!data) return null;
 
   const entry = Object.values(data)[0];
   if (!entry) return null;
 
   const result = {
-    open:      entry.ohlc.open,
-    high:      entry.ohlc.high,
-    low:       entry.ohlc.low,
-    close:     entry.ohlc.close,
+    open: entry.ohlc.open,
+    high: entry.ohlc.high,
+    low: entry.ohlc.low,
+    close: entry.ohlc.close,
     prevClose: entry.ohlc.close, // Upstox gives today's close; use it as prevClose reference
   };
   return cache(ohlcCache, symbol, result);
@@ -102,10 +149,17 @@ export async function getAllIndices(): Promise<IndexData[]> {
   if (hit) return hit;
 
   const symbols = ["NIFTY", "BANKNIFTY", "SENSEX", "FINNIFTY"];
-  const keys = symbols.map((s) => encodeURIComponent(INSTRUMENT_KEY[s])).join("%2C");
+  const keys = symbols
+    .map((s) => encodeURIComponent(INSTRUMENT_KEY[s]))
+    .join("%2C");
 
-  type LtpResponse = Record<string, { last_price: number; instrument_token: string }>;
-  const ltpData = await upstoxFetch<LtpResponse>(`/market-quote/ltp?instrument_key=${keys}`);
+  type LtpResponse = Record<
+    string,
+    { last_price: number; instrument_token: string }
+  >;
+  const ltpData = await upstoxFetch<LtpResponse>(
+    `/market-quote/ltp?instrument_key=${keys}`,
+  );
 
   if (!ltpData) {
     // Fall back to simulator
@@ -114,21 +168,37 @@ export async function getAllIndices(): Promise<IndexData[]> {
 
   const results: IndexData[] = await Promise.all(
     symbols.map(async (symbol) => {
-      const ltpKey = Object.keys(ltpData).find((k) => k.includes(INSTRUMENT_KEY[symbol].split("|")[1]) || k.replace(":", "|") === INSTRUMENT_KEY[symbol]);
-      const ltp = ltpKey ? ltpData[ltpKey].last_price : getIndexQuote(symbol).ltp;
+      const ltpKey = Object.keys(ltpData).find(
+        (k) =>
+          k.includes(INSTRUMENT_KEY[symbol].split("|")[1]) ||
+          k.replace(":", "|") === INSTRUMENT_KEY[symbol],
+      );
+      const ltp = ltpKey
+        ? ltpData[ltpKey].last_price
+        : getIndexQuote(symbol).ltp;
 
       const ohlc = await fetchOhlc(symbol);
       const simQuote = getIndexQuote(symbol);
 
-      const open      = ohlc?.open ?? simQuote.open;
-      const high      = Math.max(ohlc?.high ?? simQuote.high, ltp);
-      const low       = Math.min(ohlc?.low ?? simQuote.low, ltp);
+      const open = ohlc?.open ?? simQuote.open;
+      const high = Math.max(ohlc?.high ?? simQuote.high, ltp);
+      const low = Math.min(ohlc?.low ?? simQuote.low, ltp);
       const prevClose = ohlc?.close ?? simQuote.prevClose;
-      const change    = Math.round((ltp - prevClose) * 100) / 100;
+      const change = Math.round((ltp - prevClose) * 100) / 100;
       const changePercent = Math.round((change / prevClose) * 10000) / 100;
 
-      return { symbol, name: FULL_NAME[symbol], ltp, change, changePercent, open, high, low, prevClose };
-    })
+      return {
+        symbol,
+        name: FULL_NAME[symbol],
+        ltp,
+        change,
+        changePercent,
+        open,
+        high,
+        low,
+        prevClose,
+      };
+    }),
   );
 
   return cache(indicesCache, "all", results);
@@ -141,7 +211,9 @@ export async function getExpiries(symbol: string): Promise<string[]> {
 
   const key = encodeURIComponent(INSTRUMENT_KEY[symbol]);
   type ContractEntry = { expiry: string };
-  const data = await upstoxFetch<ContractEntry[]>(`/option/contract?instrument_key=${key}`);
+  const data = await upstoxFetch<ContractEntry[]>(
+    `/option/contract?instrument_key=${key}`,
+  );
 
   if (!data || data.length === 0) {
     return simGetExpiries(symbol);
@@ -157,12 +229,19 @@ export async function getExpiries(symbol: string): Promise<string[]> {
 }
 
 // ── Options chain ────────────────────────────────────────────────────────────
-export async function getOptionsChain(symbol: string, expiry?: string): Promise<{
-  symbol: string; expiry: string; underlyingPrice: number; options: OptionContract[];
+export async function getOptionsChain(
+  symbol: string,
+  expiry?: string,
+): Promise<{
+  symbol: string;
+  expiry: string;
+  underlyingPrice: number;
+  options: OptionContract[];
 }> {
   // Resolve expiry
   const expiries = await getExpiries(symbol);
-  const selectedExpiry = expiry && expiries.includes(expiry) ? expiry : expiries[0];
+  const selectedExpiry =
+    expiry && expiries.includes(expiry) ? expiry : expiries[0];
   if (!selectedExpiry) return simGetOptionsChain(symbol, expiry);
 
   const cacheKey = `${symbol}:${selectedExpiry}`;
@@ -176,10 +255,20 @@ export async function getOptionsChain(symbol: string, expiry?: string): Promise<
   interface UpstoxOptionLeg {
     instrument_key: string;
     market_data: {
-      ltp: number; volume: number; oi: number;
-      close_price: number; bid_price: number; ask_price: number;
+      ltp: number;
+      volume: number;
+      oi: number;
+      close_price: number;
+      bid_price: number;
+      ask_price: number;
     };
-    option_greeks: { delta: number; iv: number; vega: number; theta: number; gamma: number };
+    option_greeks: {
+      delta: number;
+      iv: number;
+      vega: number;
+      theta: number;
+      gamma: number;
+    };
   }
 
   interface UpstoxChainRow {
@@ -189,7 +278,9 @@ export async function getOptionsChain(symbol: string, expiry?: string): Promise<
     put_options: UpstoxOptionLeg;
   }
 
-  const data = await upstoxFetch<UpstoxChainRow[]>(`/option/chain?instrument_key=${key}&expiry_date=${expiryParam}`);
+  const data = await upstoxFetch<UpstoxChainRow[]>(
+    `/option/chain?instrument_key=${key}&expiry_date=${expiryParam}`,
+  );
 
   if (!data || data.length === 0) {
     return simGetOptionsChain(symbol, selectedExpiry);
@@ -208,16 +299,16 @@ export async function getOptionsChain(symbol: string, expiry?: string): Promise<
       options.push({
         strikePrice: strike,
         type: "CE",
-        premium:  ce.close_price,
-        ltp:      ce.ltp,
+        premium: ce.close_price,
+        ltp: ce.ltp,
         bidPrice: ce.bid_price,
         askPrice: ce.ask_price,
         lotSize,
-        expiry:   selectedExpiry,
-        oi:       ce.oi,
-        volume:   ce.volume,
-        iv:       ceG?.iv ?? null,
-        delta:    ceG?.delta ?? null,
+        expiry: selectedExpiry,
+        oi: ce.oi,
+        volume: ce.volume,
+        iv: ceG?.iv ?? null,
+        delta: ceG?.delta ?? null,
       });
     }
 
@@ -227,16 +318,16 @@ export async function getOptionsChain(symbol: string, expiry?: string): Promise<
       options.push({
         strikePrice: strike,
         type: "PE",
-        premium:  pe.close_price,
-        ltp:      pe.ltp,
+        premium: pe.close_price,
+        ltp: pe.ltp,
         bidPrice: pe.bid_price,
         askPrice: pe.ask_price,
         lotSize,
-        expiry:   selectedExpiry,
-        oi:       pe.oi,
-        volume:   pe.volume,
-        iv:       peG?.iv ?? null,
-        delta:    peG?.delta ?? null,
+        expiry: selectedExpiry,
+        oi: pe.oi,
+        volume: pe.volume,
+        iv: peG?.iv ?? null,
+        delta: peG?.delta ?? null,
       });
     }
   }
@@ -246,16 +337,25 @@ export async function getOptionsChain(symbol: string, expiry?: string): Promise<
 }
 
 // ── Single option price (for order execution) ────────────────────────────────
-export async function getCurrentOptionPrice(symbol: string, strikePrice: number, optionType: "CE" | "PE", expiry: string): Promise<number> {
+export async function getCurrentOptionPrice(
+  symbol: string,
+  strikePrice: number,
+  optionType: "CE" | "PE",
+  expiry: string,
+): Promise<number> {
   const cacheKey = `${symbol}:${strikePrice}:${optionType}:${expiry}`;
   const hit = cached(priceCache, cacheKey, 2000);
   if (hit) return hit;
 
   try {
     const chain = await getOptionsChain(symbol, expiry);
-    const opt = chain.options.find((o) => o.strikePrice === strikePrice && o.type === optionType);
+    const opt = chain.options.find(
+      (o) => o.strikePrice === strikePrice && o.type === optionType,
+    );
     if (opt && opt.ltp > 0) return cache(priceCache, cacheKey, opt.ltp);
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
 
   return simGetCurrentOptionPrice(symbol, strikePrice, optionType, expiry);
 }
