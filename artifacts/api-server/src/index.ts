@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startOrderRunner } from "./lib/order-runner";
