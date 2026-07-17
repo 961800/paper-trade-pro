@@ -31,10 +31,10 @@ const NSE_HOLIDAYS = new Set([
 ]);
 
 const BASE_PRICES: Record<string, { name: string; basePrice: number; lotSize: number }> = {
-  NIFTY:     { name: "NIFTY 50",   basePrice: 24500, lotSize: 50 },
-  BANKNIFTY: { name: "BANK NIFTY", basePrice: 54000, lotSize: 15 },
-  SENSEX:    { name: "SENSEX",     basePrice: 80500, lotSize: 10 },
-  FINNIFTY:  { name: "FINNIFTY",   basePrice: 23800, lotSize: 40 },
+  NIFTY:     { name: "NIFTY 50",   basePrice: 24500, lotSize: 65 },
+  BANKNIFTY: { name: "BANK NIFTY", basePrice: 54000, lotSize: 30 },
+  SENSEX:    { name: "SENSEX",     basePrice: 80500, lotSize: 20 },
+  FINNIFTY:  { name: "FINNIFTY",   basePrice: 23800, lotSize: 60 },
 };
 
 // ── Underlying index state ──────────────────────────────────────────────────

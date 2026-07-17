@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { tradesTable, positionsTable, usersTable } from "@workspace/db";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { getCurrentOptionPrice } from "../lib/market-simulator";
+import { getCurrentOptionPrice } from "../lib/upstox-client";
 
 const router = Router();
 
@@ -29,26 +29,28 @@ router.get("/", async (req: Request, res): Promise<void> => {
     .where(and(eq(positionsTable.userId, userId), eq(positionsTable.status, "open")));
 
   // Update current prices for open positions
-  const updatedPositions = openPositions.map((pos) => {
-    const currentPrice = getCurrentOptionPrice(pos.symbol, parseFloat(pos.strikePrice), pos.optionType as "CE" | "PE", pos.expiry);
-    const unrealizedPnl = (currentPrice - parseFloat(pos.averagePrice)) * pos.quantity;
-    return {
-      id: pos.id,
-      userId: pos.userId,
-      symbol: pos.symbol,
-      strikePrice: parseFloat(pos.strikePrice),
-      optionType: pos.optionType,
-      quantity: pos.quantity,
-      averagePrice: parseFloat(pos.averagePrice),
-      currentPrice,
-      pnl: parseFloat(pos.pnl),
-      unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
-      status: pos.status,
-      expiry: pos.expiry,
-      createdAt: pos.createdAt.toISOString(),
-      closedAt: pos.closedAt ? pos.closedAt.toISOString() : null,
-    };
-  });
+  const updatedPositions = await Promise.all(
+    openPositions.map(async (pos) => {
+      const currentPrice = await getCurrentOptionPrice(pos.symbol, parseFloat(pos.strikePrice), pos.optionType as "CE" | "PE", pos.expiry);
+      const unrealizedPnl = (currentPrice - parseFloat(pos.averagePrice)) * pos.quantity;
+      return {
+        id: pos.id,
+        userId: pos.userId,
+        symbol: pos.symbol,
+        strikePrice: parseFloat(pos.strikePrice),
+        optionType: pos.optionType,
+        quantity: pos.quantity,
+        averagePrice: parseFloat(pos.averagePrice),
+        currentPrice,
+        pnl: parseFloat(pos.pnl),
+        unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
+        status: pos.status,
+        expiry: pos.expiry,
+        createdAt: pos.createdAt.toISOString(),
+        closedAt: pos.closedAt ? pos.closedAt.toISOString() : null,
+      };
+    })
+  );
 
   const closedTrades = allTrades.filter((t) => t.status === "closed" && t.pnl != null);
   const totalPnl = closedTrades.reduce((sum, t) => sum + parseFloat(t.pnl ?? "0"), 0);

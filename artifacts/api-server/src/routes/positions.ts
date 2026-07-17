@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { positionsTable, tradesTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { getCurrentOptionPrice } from "../lib/upstox-client";
+import { getCurrentOptionPrice, getAllIndices } from "../lib/upstox-client";
 
 const router = Router();
 
@@ -34,19 +34,35 @@ function serializePosition(pos: typeof positionsTable.$inferSelect) {
   };
 }
 
-/** Settle expired options at ₹0 (expire worthless) */
+/** Settle expired options at intrinsic value */
 async function settleExpiredPosition(pos: typeof positionsTable.$inferSelect, userId: number): Promise<typeof positionsTable.$inferSelect> {
-  const expiredPrice = 0;
+  const indices = await getAllIndices();
+  const index = indices.find((i) => i.symbol === pos.symbol);
+  const spotPrice = index ? index.ltp : parseFloat(pos.strikePrice);
+
+  const strike = parseFloat(pos.strikePrice);
+  const isCall = pos.optionType === "CE";
+  const intrinsicValue = isCall 
+    ? Math.max(0, spotPrice - strike) 
+    : Math.max(0, strike - spotPrice);
+
+  const expiredPrice = Math.round(intrinsicValue * 100) / 100;
   const avgPrice = parseFloat(pos.averagePrice);
   const pnl = (expiredPrice - avgPrice) * pos.quantity;
 
   const [updated] = await db.update(positionsTable).set({
     status: "closed",
-    currentPrice: "0",
+    currentPrice: expiredPrice.toString(),
     pnl: pnl.toString(),
     unrealizedPnl: "0",
     closedAt: new Date(),
   }).where(eq(positionsTable.id, pos.id)).returning();
+
+  // Credit cash proceeds back to user balance if option expires in-the-money
+  if (expiredPrice > 0) {
+    const proceeds = expiredPrice * pos.quantity;
+    await db.execute(`UPDATE users SET balance = balance + ${proceeds} WHERE id = ${userId}`);
+  }
 
   // Record the expiry trade
   await db.insert(tradesTable).values({
@@ -57,18 +73,21 @@ async function settleExpiredPosition(pos: typeof positionsTable.$inferSelect, us
     action: "sell",
     quantity: pos.quantity,
     entryPrice: pos.averagePrice,
-    exitPrice: "0",
+    exitPrice: expiredPrice.toString(),
     pnl: pnl.toString(),
     status: "closed",
     expiry: pos.expiry,
     closedAt: new Date(),
   });
 
+  const pnlText = pnl >= 0 ? `+₹${pnl.toFixed(2)}` : `-₹${Math.abs(pnl).toFixed(2)}`;
   await db.insert(notificationsTable).values({
     userId,
-    type: "stop_loss",
-    title: "Option Expired Worthless",
-    message: `${pos.symbol} ${pos.strikePrice} ${pos.optionType} expired on ${pos.expiry} at ₹0. Loss: ₹${Math.abs(pnl).toFixed(2)}`,
+    type: pnl >= 0 ? "profit_target" : "stop_loss",
+    title: expiredPrice > 0 ? "Position Settled at Expiry" : "Option Expired Worthless",
+    message: expiredPrice > 0
+      ? `${pos.symbol} ${pos.strikePrice} ${pos.optionType} settled at expiry at ₹${expiredPrice.toFixed(2)} (Spot: ₹${spotPrice.toLocaleString("en-IN")}) | P&L: ${pnlText}`
+      : `${pos.symbol} ${pos.strikePrice} ${pos.optionType} expired worthless on ${pos.expiry} | P&L: ${pnlText}`,
     isRead: false,
   });
 
