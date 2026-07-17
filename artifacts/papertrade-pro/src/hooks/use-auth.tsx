@@ -26,13 +26,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const login = useCallback(() => {
-    const base = (import.meta.env.BASE_URL ?? "").replace(/\/+$/, "") || "/";
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
+    // Replit OIDC is not used in production/Netlify setup.
+    window.location.href = "/login";
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     queryClient.clear();
-    window.location.href = "/api/logout";
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || "";
+      await fetch(`${baseUrl}/api/auth/logout`, { method: "POST", credentials: "include" });
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+    window.location.href = "/login";
   }, [queryClient]);
 
   const refreshUser = useCallback(() => {

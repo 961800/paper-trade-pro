@@ -70,23 +70,6 @@ export default function Login() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Replit Auth — primary sign-in */}
-          <Button
-            variant="default"
-            className="w-full flex items-center gap-2"
-            onClick={login}
-          >
-            <LogIn className="w-4 h-4" />
-            Sign in
-          </Button>
-
-          <div className="relative">
-            <Separator />
-            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-              or continue with email
-            </span>
-          </div>
-
           {loginError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
