@@ -36,7 +36,12 @@ export async function deleteSession(sid: string): Promise<void> {
 
 export async function clearSession(res: Response, sid?: string): Promise<void> {
   if (sid) await deleteSession(sid);
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie(SESSION_COOKIE, {
+    path: "/",
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+  });
 }
 
 export function getSessionId(req: Request): string | undefined {
@@ -46,10 +51,11 @@ export function getSessionId(req: Request): string | undefined {
 }
 
 export function setSessionCookie(res: Response, sid: string): void {
+  const isProd = process.env.NODE_ENV === "production";
   res.cookie(SESSION_COOKIE, sid, {
     httpOnly: true,
-    secure: process.env.NODE_ENV !== "development",
-    sameSite: "lax",
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
     path: "/",
     maxAge: SESSION_TTL,
   });
