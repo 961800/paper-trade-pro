@@ -12,6 +12,8 @@ import {
   getCurrentOptionPrice as simGetCurrentOptionPrice,
 } from "./market-simulator";
 import type { IndexData, OptionContract, OptionsChainResult } from "./market-simulator";
+import { db, systemSettingsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
 const BASE = "https://api.upstox.com/v2";
@@ -22,28 +24,73 @@ const lastUpstoxStatus = {
   lastError: null as string | null,
 };
 
-function token(): string {
-  const tok = process.env.UPSTOX_ACCESS_TOKEN || process.env.UPSTOX_API_KEY || process.env.UPSTOX_TOKEN || "";
-  lastUpstoxStatus.configured = Boolean(tok);
-  return tok.trim();
+let cachedDbToken: string | null = null;
+let lastDbTokenFetch = 0;
+
+export async function fetchToken(): Promise<string> {
+  const now = Date.now();
+  if (cachedDbToken && (now - lastDbTokenFetch < 60000)) {
+    return cachedDbToken;
+  }
+  try {
+    const [row] = await db.select().from(systemSettingsTable)
+      .where(eq(systemSettingsTable.key, "upstox_access_token")).limit(1);
+    if (row && row.value) {
+      cachedDbToken = row.value.trim();
+      lastDbTokenFetch = now;
+      lastUpstoxStatus.configured = true;
+      return cachedDbToken;
+    }
+  } catch (err) {
+    // If table not available yet, fall through
+  }
+  const envTok = (process.env.UPSTOX_ACCESS_TOKEN || process.env.UPSTOX_API_KEY || process.env.UPSTOX_TOKEN || "").trim();
+  cachedDbToken = envTok;
+  lastDbTokenFetch = now;
+  lastUpstoxStatus.configured = Boolean(envTok);
+  return envTok;
 }
 
-function headers() {
+export function token(): string {
+  if (cachedDbToken) return cachedDbToken;
+  const envTok = (process.env.UPSTOX_ACCESS_TOKEN || process.env.UPSTOX_API_KEY || process.env.UPSTOX_TOKEN || "").trim();
+  lastUpstoxStatus.configured = Boolean(envTok);
+  return envTok;
+}
+
+export async function setUpstoxTokenInDb(newToken: string): Promise<void> {
+  const trimmed = newToken.trim();
+  cachedDbToken = trimmed;
+  lastDbTokenFetch = Date.now();
+  lastUpstoxStatus.configured = Boolean(trimmed);
+  await db.insert(systemSettingsTable).values({
+    key: "upstox_access_token",
+    value: trimmed,
+    updatedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: systemSettingsTable.key,
+    set: { value: trimmed, updatedAt: new Date() },
+  });
+}
+
+async function headers() {
+  const tok = await fetchToken();
   return {
-    Authorization: `Bearer ${token()}`,
+    Authorization: `Bearer ${tok}`,
     Accept: "application/json",
   };
 }
 
 async function upstoxFetch<T>(path: string): Promise<T | null> {
-  const tok = token();
+  const tok = await fetchToken();
   if (!tok) {
     lastUpstoxStatus.connected = false;
-    lastUpstoxStatus.lastError = "No UPSTOX_ACCESS_TOKEN configured in environment.";
+    lastUpstoxStatus.lastError = "No UPSTOX_ACCESS_TOKEN configured in environment or database.";
     return null;
   }
   try {
-    const res = await fetch(`${BASE}${path}`, { headers: headers() });
+    const h = await headers();
+    const res = await fetch(`${BASE}${path}`, { headers: h });
     if (!res.ok) {
       const errText = await res.text();
       lastUpstoxStatus.connected = false;

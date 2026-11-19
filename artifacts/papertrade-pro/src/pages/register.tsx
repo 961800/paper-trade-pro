@@ -73,10 +73,16 @@ function formatINR(n: number): string {
 
 export default function Register() {
   const [, setLocation] = useLocation();
-  const { refreshUser } = useAuth();
+  const { isAuthenticated, setUser } = useAuth();
   const { toast } = useToast();
   const registerMutation = useRegister();
   const sendOtpMutation = useSendOtp();
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      setLocation("/dashboard");
+    }
+  }, [isAuthenticated, setLocation]);
 
   const [step, setStep] = useState(1);
   const [demoOtp, setDemoOtp] = useState<string | null>(null);
@@ -131,7 +137,7 @@ export default function Register() {
       if (res.token) {
         localStorage.setItem("papertrade_token", res.token);
       }
-      refreshUser();
+      setUser(res.user);
       toast({
         title: "Account created!",
         description: `${formatINR(data.initialCapital)} virtual capital credited. Happy trading!`,

@@ -10,14 +10,16 @@ interface AuthContextType {
   login: () => void;
   logout: () => void;
   refreshUser: () => void;
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const token = typeof window !== "undefined" ? localStorage.getItem("papertrade_token") : null;
 
-  const { data: user, isLoading } = useGetMe({
+  const { data: user, isLoading, isFetching, isError } = useGetMe({
     query: {
       queryKey: getGetMeQueryKey(),
       retry: false,
@@ -25,8 +27,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
+  // If token was rejected (401), clean up localStorage so user is not in a bad state
+  React.useEffect(() => {
+    if (isError) {
+      localStorage.removeItem("papertrade_token");
+    }
+  }, [isError]);
+
+  const setUser = useCallback((userData: User | null) => {
+    queryClient.setQueryData(getGetMeQueryKey(), userData);
+  }, [queryClient]);
+
   const login = useCallback(() => {
-    // Replit OIDC is not used in production/Netlify setup.
     window.location.href = "/login";
   }, []);
 
@@ -43,18 +55,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const refreshUser = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+    return queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
   }, [queryClient]);
+
+  // If a token is in localStorage, wait until isFetching completes before treating as unauthenticated
+  const effectiveLoading = isLoading || (!!token && !user && isFetching);
 
   return (
     <AuthContext.Provider
       value={{
         user: user ?? null,
         isAuthenticated: !!user,
-        isLoading,
+        isLoading: effectiveLoading,
         login,
         logout,
         refreshUser,
+        setUser,
       }}
     >
       {children}

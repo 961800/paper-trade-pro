@@ -64,7 +64,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                <PnLBadge amount={dashboard.totalPnl} showPercent percentValue={(dashboard.totalPnl / user!.initialCapital) * 100} />
+                <PnLBadge amount={dashboard.totalPnl} showPercent percentValue={(dashboard.totalPnl / (user?.initialCapital || 100000)) * 100} />
               </div>
             </CardContent>
           </Card>

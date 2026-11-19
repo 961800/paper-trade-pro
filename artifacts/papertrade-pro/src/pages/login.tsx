@@ -35,10 +35,16 @@ function extractErrorMessage(error: unknown): string {
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login, refreshUser } = useAuth();
+  const { isAuthenticated, setUser } = useAuth();
   const { toast } = useToast();
   const loginMutation = useLogin();
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      setLocation("/dashboard");
+    }
+  }, [isAuthenticated, setLocation]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -53,7 +59,7 @@ export default function Login() {
       if (res.token) {
         localStorage.setItem("papertrade_token", res.token);
       }
-      refreshUser();
+      setUser(res.user);
       toast({ title: "Welcome back!", description: `Logged in as ${res.user.fullName}` });
       setLocation("/dashboard");
     } catch (error: unknown) {

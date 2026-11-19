@@ -25,6 +25,39 @@ export default function Settings() {
   const [savingRisk, setSavingRisk] = useState(false);
   const [togglingKillSwitch, setTogglingKillSwitch] = useState(false);
 
+  // Upstox token state
+  const [upstoxTokenInput, setUpstoxTokenInput] = useState("");
+  const [upstoxStatus, setUpstoxStatus] = useState<any>(null);
+  const [savingUpstox, setSavingUpstox] = useState(false);
+
+  React.useEffect(() => {
+    customFetch<any>("/api/market/upstox-status")
+      .then((data) => setUpstoxStatus(data))
+      .catch(() => {});
+  }, []);
+
+  const handleSaveUpstoxToken = async () => {
+    if (!upstoxTokenInput.trim()) {
+      toast({ variant: "destructive", title: "Token required", description: "Please paste your Upstox Access Token." });
+      return;
+    }
+    setSavingUpstox(true);
+    try {
+      const res = await customFetch<{ success: boolean; message: string }>("/api/market/upstox-token", {
+        method: "POST",
+        body: JSON.stringify({ token: upstoxTokenInput.trim() }),
+      });
+      toast({ title: "Upstox Connected!", description: res.message });
+      setUpstoxTokenInput("");
+      const updated = await customFetch<any>("/api/market/upstox-status");
+      setUpstoxStatus(updated);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Connection Failed", description: err.message });
+    } finally {
+      setSavingUpstox(false);
+    }
+  };
+
   const themes: { value: "light" | "dark" | "system"; label: string; icon: React.ReactNode }[] = [
     { value: "light", label: "Light", icon: <Sun className="w-4 h-4" /> },
     { value: "dark", label: "Dark", icon: <Moon className="w-4 h-4" /> },
@@ -152,6 +185,58 @@ export default function Settings() {
               >
                 {savingRisk ? "Saving Limits..." : "Save Risk & Discipline Limits"}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ================= UPSTOX REAL-TIME MARKET DATA ================= */}
+        <Card>
+          <CardHeader className="py-3 px-4 border-b border-border flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-base">📈</span>
+              <CardTitle className="text-sm">Upstox Real-Time Market Feed</CardTitle>
+            </div>
+            {upstoxStatus && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs font-semibold",
+                  upstoxStatus.connected
+                    ? "bg-green-500/10 text-green-400 border-green-500/30"
+                    : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                )}
+              >
+                {upstoxStatus.connected ? "LIVE FEED ACTIVE" : "SIMULATOR ACTIVE"}
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {upstoxStatus?.connected
+                ? "Your app is actively receiving real-time NSE & BSE market feeds directly from Upstox API v2."
+                : "Enter your daily Upstox OAuth Access Token to switch from simulator to live tick-by-tick market data."}
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold block">Upstox Access Token (JWT)</label>
+              <textarea
+                rows={2}
+                value={upstoxTokenInput}
+                onChange={(e) => setUpstoxTokenInput(e.target.value)}
+                placeholder="Paste your generated Upstox Access Token (starts with eyJ...)"
+                className="w-full px-3 py-2 rounded border border-border bg-background text-xs font-mono focus:ring-1 focus:ring-primary"
+              />
+              <div className="flex justify-between items-center text-[11px] text-muted-foreground">
+                <span>Tokens are generated daily in Upstox Developer Console</span>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs font-semibold"
+                  disabled={savingUpstox}
+                  onClick={handleSaveUpstoxToken}
+                >
+                  {savingUpstox ? "Connecting..." : "Test & Save Token"}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllIndices, getOptionsChain, getExpiries, getMarketStatus, getUpstoxConnectionStatus } from "../lib/upstox-client";
+import { getAllIndices, getOptionsChain, getExpiries, getMarketStatus, getUpstoxConnectionStatus, setUpstoxTokenInDb } from "../lib/upstox-client";
 
 const router = Router();
 const VALID_SYMBOLS = ["NIFTY", "BANKNIFTY", "SENSEX", "FINNIFTY"];
@@ -10,6 +10,35 @@ router.get("/status", (_req, res): void => {
 
 router.get("/upstox-status", (_req, res): void => {
   res.json(getUpstoxConnectionStatus());
+});
+
+router.post("/upstox-token", async (req, res): Promise<void> => {
+  const { token } = req.body;
+  if (!token || typeof token !== "string" || !token.trim()) {
+    res.status(400).json({ error: "Access token is required" });
+    return;
+  }
+  const cleanToken = token.trim();
+  try {
+    const testRes = await fetch("https://api.upstox.com/v2/market-quote/ltp?instrument_key=NSE_INDEX%7CNifty%2050", {
+      headers: {
+        Authorization: `Bearer ${cleanToken}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!testRes.ok) {
+      const errJson = (await testRes.json().catch(() => null)) as any;
+      const msg = errJson?.errors?.[0]?.message ?? `HTTP ${testRes.status}: Upstox rejected token`;
+      res.status(400).json({ error: msg });
+      return;
+    }
+
+    await setUpstoxTokenInDb(cleanToken);
+    res.json({ success: true, message: "Token verified and saved! Live Upstox market feed is now active." });
+  } catch (err: any) {
+    res.status(500).json({ error: `Connection failed: ${err.message}` });
+  }
 });
 
 router.get("/indices", async (_req, res): Promise<void> => {
