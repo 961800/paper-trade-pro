@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, ArrowLeft, Phone, AlertCircle, Loader2, Copy, Check, IndianRupee } from "lucide-react";
+import { ArrowRight, ArrowLeft, Phone, AlertCircle, Loader2, Copy, Check, IndianRupee, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function extractErrorMessage(error: unknown): string {
@@ -88,6 +88,7 @@ export default function Register() {
   const [demoOtp, setDemoOtp] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [otpSentEmail, setOtpSentEmail] = useState<string | null>(null);
   const [otpSentPhone, setOtpSentPhone] = useState<string | null>(null);
   const [isCustomCapital, setIsCustomCapital] = useState(false);
 
@@ -158,14 +159,20 @@ export default function Register() {
     setFormError(null);
     const ok = await form.trigger(["phone", "age", "city", "initialCapital"]);
     if (!ok) return;
-    const phone = form.getValues("phone");
+    const email = form.getValues("email").trim().toLowerCase();
+    const phone = form.getValues("phone").trim();
     try {
-      const res = await sendOtpMutation.mutateAsync({ data: { phone } });
+      const res = await sendOtpMutation.mutateAsync({ data: { email, phone } });
       setDemoOtp(res.otp ?? null);
+      setOtpSentEmail(email);
       setOtpSentPhone(phone);
       form.setValue("otp", "");
       setCopied(false);
       setStep(3);
+      toast({
+        title: "Verification Code Sent",
+        description: res.message || `Code sent to ${email}`,
+      });
     } catch (error: unknown) {
       setFormError(extractErrorMessage(error));
     }
@@ -173,19 +180,23 @@ export default function Register() {
 
   const resendOtp = async () => {
     setFormError(null);
-    const phone = form.getValues("phone");
+    const email = form.getValues("email").trim().toLowerCase();
+    const phone = form.getValues("phone").trim();
     try {
-      const res = await sendOtpMutation.mutateAsync({ data: { phone } });
+      const res = await sendOtpMutation.mutateAsync({ data: { email, phone } });
       setDemoOtp(res.otp ?? null);
       form.setValue("otp", "");
       setCopied(false);
-      toast({ title: "New OTP generated", description: "Check the OTP box below." });
+      toast({
+        title: "New Verification Code Sent",
+        description: res.message || `Check your Gmail inbox (${email})`,
+      });
     } catch (error: unknown) {
       setFormError(extractErrorMessage(error));
     }
   };
 
-  const stepLabels = ["Account", "Profile", "Verify"];
+  const stepLabels = ["Account", "Profile", "Email Verify"];
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
@@ -199,7 +210,7 @@ export default function Register() {
           <CardDescription>
             {step === 1 ? "Create your virtual trading account"
               : step === 2 ? "Set up your profile & starting capital"
-              : "Verify your phone number"}
+              : "Verify your Gmail address"}
           </CardDescription>
 
           <div className="flex justify-center gap-2 mt-3">
@@ -384,7 +395,7 @@ export default function Register() {
                     <Button type="button" className="flex-1" disabled={sendOtpMutation.isPending} onClick={sendOtp}>
                       {sendOtpMutation.isPending
                         ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending...</>
-                        : <><Phone className="w-4 h-4 mr-2" /> Send OTP</>}
+                        : <><Mail className="w-4 h-4 mr-2" /> Send Gmail OTP</>}
                     </Button>
                   </div>
                 </div>
@@ -410,12 +421,24 @@ export default function Register() {
                     </button>
                   </div>
 
-                  {/* Demo OTP Banner */}
+                  {/* Gmail Notice */}
+                  <div className="rounded-xl border border-primary/40 bg-primary/10 p-3.5 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-primary shrink-0" />
+                      <span className="font-semibold text-xs text-foreground">Gmail Verification Code</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      We sent a 6-digit OTP code to: <strong className="text-primary font-mono">{otpSentEmail || form.getValues("email")}</strong>.
+                      Please check your inbox (and Spam folder).
+                    </p>
+                  </div>
+
+                  {/* Quick Fill / Demo OTP Banner if present */}
                   {demoOtp && (
-                    <div className="rounded-xl border-2 border-primary bg-primary/10 p-4">
+                    <div className="rounded-xl border border-primary/50 bg-primary/5 p-3.5">
                       <div className="flex items-center justify-between mb-1">
-                        <p className="text-xs font-semibold text-primary uppercase tracking-wider">
-                          Demo Mode — Your OTP
+                        <p className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+                          Quick Fill (Testing Mode)
                         </p>
                         <Button
                           type="button"
@@ -429,23 +452,18 @@ export default function Register() {
                             : <><Copy className="w-3 h-3 mr-1" /> Copy & fill</>}
                         </Button>
                       </div>
-                      <p className="text-4xl font-bold font-mono tracking-[0.35em] text-primary text-center py-1">
+                      <p className="text-3xl font-bold font-mono tracking-[0.35em] text-primary text-center py-1">
                         {demoOtp}
                       </p>
-                      <p className="text-xs text-muted-foreground text-center mt-1">
-                        Valid for 5 minutes · No SMS sent (demo app)
+                      <p className="text-[10px] text-muted-foreground text-center">
+                        Valid for 10 minutes · Real emails sent when SMTP is configured
                       </p>
-                      {otpSentPhone && (
-                        <p className="text-xs text-muted-foreground text-center">
-                          For number: +91 {otpSentPhone}
-                        </p>
-                      )}
                     </div>
                   )}
 
                   <FormField control={form.control} name="otp" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Enter 6-Digit OTP</FormLabel>
+                      <FormLabel>Enter 6-Digit Gmail OTP</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="_ _ _ _ _ _"

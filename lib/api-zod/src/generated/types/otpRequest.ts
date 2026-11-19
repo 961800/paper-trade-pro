@@ -7,5 +7,6 @@
  */
 
 export interface OtpRequest {
-  phone: string;
+  phone?: string;
+  email?: string;
 }

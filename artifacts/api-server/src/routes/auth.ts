@@ -5,6 +5,7 @@ import { eq, or, and, ilike } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 import { createSession, setSessionCookie } from "../lib/auth";
+import { sendEmailOtp } from "../lib/mailer";
 
 const router = Router();
 
@@ -62,21 +63,54 @@ router.get("/me", async (req, res): Promise<void> => {
 
 // POST /auth/send-otp
 router.post("/send-otp", async (req, res): Promise<void> => {
-  const schema = z.object({ phone: z.string().regex(phoneRegex) });
-  const parse = schema.safeParse(req.body);
-  if (!parse.success) { res.status(400).json({ error: "Please enter a valid Indian mobile number." }); return; }
-  const { phone } = parse.data;
+  const schema = z.object({
+    email: z.string().email().optional(),
+    phone: z.string().optional(),
+  }).refine((data) => data.email || data.phone, {
+    message: "Email or mobile number is required.",
+  });
 
-  const existing = otpStore.get(phone);
+  const parse = schema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.errors[0]?.message ?? "Please provide a valid email or mobile number." });
+    return;
+  }
+
+  const { email, phone } = parse.data;
+  const cleanEmail = email ? email.trim().toLowerCase() : "";
+  const cleanPhone = phone ? phone.trim() : "";
+  const primaryKey = cleanEmail || cleanPhone;
+
+  const existing = otpStore.get(primaryKey);
   if (existing?.lockedUntil && Date.now() < existing.lockedUntil) {
     const rem = Math.ceil((existing.lockedUntil - Date.now()) / 60000);
-    res.status(429).json({ error: `OTP locked. Try again in ${rem} minute(s).` });
+    res.status(429).json({ error: `OTP locked due to previous failed attempts. Try again in ${rem} minute(s).` });
     return;
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(phone, { otp, expiresAt: Date.now() + 5 * 60 * 1000, attempts: 0 });
-  res.json({ success: true, message: "OTP sent (Demo mode)", otp });
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  const entry: OTPEntry = { otp, expiresAt, attempts: 0 };
+  if (cleanEmail) otpStore.set(cleanEmail, entry);
+  if (cleanPhone) otpStore.set(cleanPhone, entry);
+
+  let mailResult = { success: true, message: "", mode: "fallback" as const };
+  if (cleanEmail) {
+    mailResult = await sendEmailOtp(cleanEmail, otp);
+  }
+
+  res.json({
+    success: true,
+    message: cleanEmail
+      ? (mailResult.mode === "smtp"
+          ? `Verification OTP sent to your Gmail inbox: ${cleanEmail}`
+          : `Verification code ready for ${cleanEmail}`)
+      : `OTP sent to mobile: ${cleanPhone}`,
+    email: cleanEmail || undefined,
+    otp: mailResult.mode === "fallback" ? otp : undefined,
+    mode: mailResult.mode,
+  });
 });
 
 // POST /auth/register
@@ -93,30 +127,57 @@ const registerSchema = z.object({
 
 router.post("/register", async (req, res): Promise<void> => {
   const parse = registerSchema.safeParse(req.body);
-  if (!parse.success) { res.status(400).json({ error: parse.error.errors[0]?.message ?? "Invalid input" }); return; }
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.errors[0]?.message ?? "Invalid input" });
+    return;
+  }
   const { fullName, email, password, phone, age, city, otp, initialCapital } = parse.data;
 
   const cleanEmail = email.trim().toLowerCase();
   const cleanPassword = password.trim();
   const cleanPhone = phone.trim();
 
-  const entry = otpStore.get(cleanPhone);
-  if (!entry) { res.status(400).json({ error: "OTP not requested." }); return; }
-  if (entry.lockedUntil && Date.now() < entry.lockedUntil) { res.status(429).json({ error: "OTP locked." }); return; }
-  if (Date.now() > entry.expiresAt) { otpStore.delete(cleanPhone); res.status(400).json({ error: "OTP expired." }); return; }
-  entry.attempts++;
-  if (entry.otp !== otp) {
-    if (entry.attempts >= 3) { entry.lockedUntil = Date.now() + 5 * 60 * 1000; res.status(400).json({ error: "Invalid OTP. Locked for 5 minutes." }); }
-    else { res.status(400).json({ error: `Invalid OTP. ${3 - entry.attempts} attempt(s) remaining.` }); }
+  // Validate OTP strictly against cleanEmail first, then cleanPhone
+  const entry = otpStore.get(cleanEmail) || otpStore.get(cleanPhone);
+  if (!entry) {
+    res.status(400).json({ error: "Verification code not requested for this email. Please click Send OTP first." });
     return;
   }
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
+    res.status(429).json({ error: "Too many failed OTP attempts. Account registration locked for 5 minutes." });
+    return;
+  }
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(cleanEmail);
+    otpStore.delete(cleanPhone);
+    res.status(400).json({ error: "Verification code expired. Please request a new OTP." });
+    return;
+  }
+
+  entry.attempts++;
+  if (entry.otp !== otp) {
+    if (entry.attempts >= 3) {
+      entry.lockedUntil = Date.now() + 5 * 60 * 1000;
+      res.status(400).json({ error: "Incorrect OTP. Maximum attempts reached. Locked for 5 minutes." });
+    } else {
+      res.status(400).json({ error: `Incorrect Gmail OTP. ${3 - entry.attempts} attempt(s) remaining.` });
+    }
+    return;
+  }
+
+  // OTP verified successfully! Clear stored OTP
+  otpStore.delete(cleanEmail);
   otpStore.delete(cleanPhone);
 
   const dup = await db.select().from(usersTable)
     .where(or(ilike(usersTable.email, cleanEmail), eq(usersTable.phone, cleanPhone)))
     .limit(1);
   if (dup.length > 0) {
-    res.status(409).json({ error: dup[0].email.toLowerCase() === cleanEmail ? "Email already registered." : "Phone already registered." });
+    res.status(409).json({
+      error: dup[0].email.toLowerCase() === cleanEmail
+        ? "Email is already registered. Please login instead."
+        : "Mobile number is already registered.",
+    });
     return;
   }
 

@@ -475,7 +475,8 @@ export interface MarketStatus {
 }
 
 export interface OtpRequest {
-  phone: string;
+  phone?: string;
+  email?: string;
 }
 
 export interface OtpResponse {
@@ -483,6 +484,8 @@ export interface OtpResponse {
   message: string;
   /** Demo only: OTP returned in response since no SMS provider is configured */
   otp?: string;
+  email?: string;
+  mode?: "smtp" | "fallback";
 }
 
 export type GetAdminUsers200 = {
