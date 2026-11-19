@@ -1,15 +1,29 @@
-import React from "react";
+import React, { useState } from "react";
 import { Layout } from "@/components/layout";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Sun, Moon, Monitor, LogOut } from "lucide-react";
+import { Sun, Moon, Monitor, LogOut, ShieldAlert, Lock, Unlock, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const { logout, user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const userAny = user as any;
+  const isKillSwitchActive = userAny?.killSwitchActive ?? false;
+
+  const [maxDailyLoss, setMaxDailyLoss] = useState(userAny?.maxDailyLoss ? String(userAny.maxDailyLoss) : "");
+  const [maxDailyTrades, setMaxDailyTrades] = useState(userAny?.maxDailyTrades ? String(userAny.maxDailyTrades) : "20");
+  const [savingRisk, setSavingRisk] = useState(false);
+  const [togglingKillSwitch, setTogglingKillSwitch] = useState(false);
 
   const themes: { value: "light" | "dark" | "system"; label: string; icon: React.ReactNode }[] = [
     { value: "light", label: "Light", icon: <Sun className="w-4 h-4" /> },
@@ -17,13 +31,130 @@ export default function Settings() {
     { value: "system", label: "System", icon: <Monitor className="w-4 h-4" /> },
   ];
 
+  const handleToggleKillSwitch = async () => {
+    setTogglingKillSwitch(true);
+    try {
+      const res = await customFetch<{ killSwitchActive: boolean; message: string }>("/api/auth/kill-switch/toggle", {
+        method: "POST",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({
+        title: res.killSwitchActive ? "Kill Switch ACTIVATED" : "Kill Switch DEACTIVATED",
+        description: res.message,
+      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Action failed", description: err.message });
+    } finally {
+      setTogglingKillSwitch(false);
+    }
+  };
+
+  const handleSaveRiskLimits = async () => {
+    setSavingRisk(true);
+    try {
+      await customFetch("/api/auth/profile", {
+        method: "PATCH",
+        body: JSON.stringify({
+          maxDailyLoss: maxDailyLoss ? parseFloat(maxDailyLoss) : null,
+          maxDailyTrades: maxDailyTrades ? parseInt(maxDailyTrades) : null,
+        }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Risk Limits Updated", description: "Your daily loss and trade count caps have been saved." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Update failed", description: err.message });
+    } finally {
+      setSavingRisk(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-4 max-w-xl">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground text-sm">App preferences and account settings</p>
+          <h1 className="text-2xl font-bold tracking-tight">Settings & Discipline</h1>
+          <p className="text-muted-foreground text-sm">App preferences, account, and risk management kill switch</p>
         </div>
+
+        {/* ================= RISK MANAGEMENT & DISCIPLINE KILL SWITCH ================= */}
+        <Card className={cn("border-2 transition-all", isKillSwitchActive ? "border-red-500/50 bg-red-500/5" : "border-border")}>
+          <CardHeader className="py-3 px-4 border-b border-border flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className={cn("w-4 h-4", isKillSwitchActive ? "text-red-400" : "text-primary")} />
+              <CardTitle className="text-sm">Risk Management & Discipline Controls</CardTitle>
+            </div>
+            <Badge variant="outline" className={cn("text-xs font-semibold", isKillSwitchActive ? "bg-red-500/20 text-red-400 border-red-500/30" : "bg-green-500/10 text-green-400 border-green-500/30")}>
+              {isKillSwitchActive ? "LOCKED" : "ACTIVE"}
+            </Badge>
+          </CardHeader>
+          <CardContent className="p-4 space-y-4">
+            {/* Kill Switch Toggle Banner */}
+            <div className="bg-muted/30 p-3 rounded-lg border border-border flex items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold text-xs flex items-center gap-1.5">
+                  {isKillSwitchActive ? <Lock className="w-3.5 h-3.5 text-red-400" /> : <Unlock className="w-3.5 h-3.5 text-green-400" />}
+                  Emergency Trading Kill Switch
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {isKillSwitchActive
+                    ? "Trading is currently locked. Orders cannot be placed."
+                    : "Instantly halt trading if feeling emotional or experiencing revenge trading."}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant={isKillSwitchActive ? "default" : "destructive"}
+                className="h-8 text-xs shrink-0"
+                disabled={togglingKillSwitch}
+                onClick={handleToggleKillSwitch}
+              >
+                {togglingKillSwitch ? "Updating..." : isKillSwitchActive ? "Deactivate" : "Activate"}
+              </Button>
+            </div>
+
+            {/* Daily Loss Limit */}
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="text-xs font-semibold block mb-1">Max Daily Loss Limit (₹)</label>
+                <input
+                  type="number"
+                  value={maxDailyLoss}
+                  onChange={(e) => setMaxDailyLoss(e.target.value)}
+                  placeholder="e.g. 5000 (trading locks if daily loss reaches this)"
+                  className="w-full px-3 py-1.5 rounded border border-border bg-background text-xs font-mono focus:ring-1 focus:ring-primary"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  When reached, today's trading is automatically locked to protect your capital.
+                </p>
+              </div>
+
+              {/* Max Daily Trades */}
+              <div>
+                <label className="text-xs font-semibold block mb-1">Max Trades Per Day</label>
+                <input
+                  type="number"
+                  value={maxDailyTrades}
+                  onChange={(e) => setMaxDailyTrades(e.target.value)}
+                  placeholder="e.g. 15 (prevents overtrading)"
+                  className="w-full px-3 py-1.5 rounded border border-border bg-background text-xs font-mono focus:ring-1 focus:ring-primary"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Caps total order executions per calendar day.
+                </p>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs font-semibold"
+                disabled={savingRisk}
+                onClick={handleSaveRiskLimits}
+              >
+                {savingRisk ? "Saving Limits..." : "Save Risk & Discipline Limits"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Appearance */}
         <Card>
@@ -56,15 +187,15 @@ export default function Settings() {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">{user?.fullName}</p>
+                <p className="font-medium text-sm">{user?.fullName}</p>
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
               </div>
-              <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/30">Active</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/30">Active</span>
             </div>
             <div className="pt-2 border-t border-border">
               <Button
                 variant="outline"
-                className="w-full border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-400"
+                className="w-full border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-400 text-xs"
                 onClick={logout}
               >
                 <LogOut className="w-4 h-4 mr-2" /> Sign Out
@@ -78,26 +209,18 @@ export default function Settings() {
           <CardHeader className="py-3 px-4 border-b border-border">
             <CardTitle className="text-sm">About</CardTitle>
           </CardHeader>
-          <CardContent className="p-4 space-y-2 text-sm text-muted-foreground">
+          <CardContent className="p-4 space-y-2 text-xs text-muted-foreground">
             <div className="flex justify-between">
-              <span>App</span>
-              <span className="font-medium text-foreground">PaperTrade Pro</span>
+              <span>Platform</span>
+              <span className="font-medium text-foreground">PaperTrade Pro v2.0</span>
             </div>
             <div className="flex justify-between">
-              <span>Version</span>
-              <span>1.0.0</span>
+              <span>Pricing & Analytics Engine</span>
+              <span>Black-Scholes (Full Greeks: Δ, Γ, Θ, ν)</span>
             </div>
             <div className="flex justify-between">
-              <span>Pricing Engine</span>
-              <span>Black-Scholes</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Market Data</span>
-              <span>Simulated · Refreshes every 10s</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Virtual Capital</span>
-              <span>₹1,00,000 per account</span>
+              <span>Execution Engine</span>
+              <span>Real-time Limit & Bracket Order Runner</span>
             </div>
           </CardContent>
         </Card>

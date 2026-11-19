@@ -27,6 +27,9 @@ function serializePosition(pos: typeof positionsTable.$inferSelect) {
     currentPrice: currentPrice,
     pnl: parseFloat(pos.pnl),
     unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
+    stopLoss: pos.stopLoss ? parseFloat(pos.stopLoss) : null,
+    targetPrice: pos.targetPrice ? parseFloat(pos.targetPrice) : null,
+    trailingStop: pos.trailingStop ? parseFloat(pos.trailingStop) : null,
     status: pos.status,
     expiry: pos.expiry,
     createdAt: pos.createdAt.toISOString(),
@@ -205,6 +208,39 @@ router.post("/:id/squareoff", async (req: Request, res): Promise<void> => {
   });
 
   res.json(serializePosition(updatedPos));
+});
+
+router.patch("/:id/bracket", async (req: Request, res): Promise<void> => {
+  const userId = (req as AuthReq).userId;
+  const id = parseInt(req.params.id as string);
+  const { stopLoss, targetPrice, trailingStop } = req.body;
+
+  const [pos] = await db.select().from(positionsTable)
+    .where(and(eq(positionsTable.id, id), eq(positionsTable.userId, userId))).limit(1);
+
+  if (!pos) {
+    res.status(404).json({ error: "Position not found" });
+    return;
+  }
+  if (pos.status !== "open") {
+    res.status(400).json({ error: "Cannot set bracket orders on closed position" });
+    return;
+  }
+
+  const updateData: Record<string, unknown> = {
+    stopLoss: stopLoss !== undefined ? (stopLoss ? stopLoss.toString() : null) : pos.stopLoss,
+    targetPrice: targetPrice !== undefined ? (targetPrice ? targetPrice.toString() : null) : pos.targetPrice,
+    trailingStop: trailingStop !== undefined ? (trailingStop ? trailingStop.toString() : null) : pos.trailingStop,
+  };
+
+  if (trailingStop && !pos.highWaterMark) {
+    updateData.highWaterMark = pos.currentPrice;
+  }
+
+  const [updated] = await db.update(positionsTable).set(updateData)
+    .where(eq(positionsTable.id, id)).returning();
+
+  res.json(serializePosition(updated));
 });
 
 export { router as positionsRouter };

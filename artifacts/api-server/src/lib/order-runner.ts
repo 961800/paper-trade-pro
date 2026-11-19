@@ -1,11 +1,119 @@
 import { db } from "@workspace/db";
-import { ordersTable, notificationsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { ordersTable, positionsTable, tradesTable, notificationsTable } from "@workspace/db";
+import { eq, and, or, isNotNull } from "drizzle-orm";
 import { getCurrentOptionPrice } from "./upstox-client";
 import { executeOrder } from "./order-executor";
 import { logger } from "./logger";
 
 let runnerInterval: NodeJS.Timeout | null = null;
+
+export async function checkAndExecuteBracketOrders() {
+  try {
+    const openPositions = await db.select().from(positionsTable)
+      .where(and(
+        eq(positionsTable.status, "open"),
+        or(
+          isNotNull(positionsTable.stopLoss),
+          isNotNull(positionsTable.targetPrice),
+          isNotNull(positionsTable.trailingStop)
+        )
+      ));
+
+    if (openPositions.length === 0) return;
+
+    for (const pos of openPositions) {
+      try {
+        const strike = parseFloat(pos.strikePrice);
+        const ltp = await getCurrentOptionPrice(
+          pos.symbol,
+          strike,
+          pos.optionType as "CE" | "PE",
+          pos.expiry
+        );
+
+        if (ltp <= 0) continue;
+
+        let currentSL = pos.stopLoss ? parseFloat(pos.stopLoss) : null;
+        const currentTarget = pos.targetPrice ? parseFloat(pos.targetPrice) : null;
+        const trailingStop = pos.trailingStop ? parseFloat(pos.trailingStop) : null;
+        let highWaterMark = pos.highWaterMark ? parseFloat(pos.highWaterMark) : parseFloat(pos.averagePrice);
+
+        // Check trailing stop update
+        if (trailingStop && ltp > highWaterMark) {
+          highWaterMark = ltp;
+          const calculatedSL = Math.round((ltp - trailingStop) * 100) / 100;
+          if (!currentSL || calculatedSL > currentSL) {
+            currentSL = calculatedSL;
+            await db.update(positionsTable).set({
+              highWaterMark: highWaterMark.toString(),
+              stopLoss: currentSL.toString(),
+            }).where(eq(positionsTable.id, pos.id));
+          }
+        }
+
+        let triggerType: "stop_loss" | "profit_target" | null = null;
+        if (currentSL !== null && ltp <= currentSL) {
+          triggerType = "stop_loss";
+        } else if (currentTarget !== null && ltp >= currentTarget) {
+          triggerType = "profit_target";
+        }
+
+        if (triggerType) {
+          const avgPrice = parseFloat(pos.averagePrice);
+          const pnl = (ltp - avgPrice) * pos.quantity;
+          const proceeds = ltp * pos.quantity;
+
+          // 1. Close position
+          await db.update(positionsTable).set({
+            status: "closed",
+            currentPrice: ltp.toString(),
+            pnl: pnl.toString(),
+            unrealizedPnl: "0",
+            closedAt: new Date(),
+          }).where(eq(positionsTable.id, pos.id));
+
+          // 2. Credit balance
+          await db.execute(`UPDATE users SET balance = balance + ${proceeds} WHERE id = ${pos.userId}`);
+
+          // 3. Record trade
+          await db.insert(tradesTable).values({
+            userId: pos.userId,
+            symbol: pos.symbol,
+            strikePrice: pos.strikePrice,
+            optionType: pos.optionType,
+            action: "sell",
+            quantity: pos.quantity,
+            entryPrice: pos.averagePrice,
+            exitPrice: ltp.toString(),
+            pnl: pnl.toString(),
+            status: "closed",
+            expiry: pos.expiry,
+            strategy: triggerType === "stop_loss" ? "SL Hit" : "Target Hit",
+            closedAt: new Date(),
+          });
+
+          // 4. Record notification
+          const isProfit = triggerType === "profit_target";
+          const title = isProfit ? "🎯 Profit Target Hit!" : "🚨 Stop-Loss Triggered!";
+          const pnlText = pnl >= 0 ? `+₹${pnl.toFixed(2)}` : `-₹${Math.abs(pnl).toFixed(2)}`;
+          await db.insert(notificationsTable).values({
+            userId: pos.userId,
+            type: triggerType,
+            title,
+            message: `${pos.symbol} ${pos.strikePrice} ${pos.optionType} auto-squared off at ₹${ltp.toFixed(2)} (${isProfit ? `Target: ₹${currentTarget}` : `SL: ₹${currentSL}`}) | P&L: ${pnlText}`,
+            isRead: false,
+          });
+
+          logger.info(`[Bracket Runner] ${title} for pos ${pos.id} user ${pos.userId} at ₹${ltp}`);
+        }
+      } catch (err: any) {
+        logger.error({ err, posId: pos.id }, "[Bracket Runner] Error processing position bracket");
+      }
+    }
+  } catch (err: any) {
+    logger.error({ err }, "[Bracket Runner] Error checking bracket orders");
+  }
+}
 
 export async function checkAndExecuteLimitOrders() {
   try {
@@ -67,7 +175,10 @@ export async function checkAndExecuteLimitOrders() {
             order.action,
             order.quantity,
             ltp,
-            order.expiry
+            order.expiry,
+            order.stopLoss ? parseFloat(order.stopLoss) : null,
+            order.targetPrice ? parseFloat(order.targetPrice) : null,
+            order.trailingStop ? parseFloat(order.trailingStop) : null
           );
 
           // 6. Record notification
@@ -90,8 +201,11 @@ export async function checkAndExecuteLimitOrders() {
 
 export function startOrderRunner(intervalMs = 4000) {
   if (runnerInterval) return;
-  logger.info("[Limit Order Runner] Starting background limit order runner...");
-  runnerInterval = setInterval(checkAndExecuteLimitOrders, intervalMs);
+  logger.info("[Order Runner] Starting background order & bracket runner...");
+  runnerInterval = setInterval(async () => {
+    await checkAndExecuteLimitOrders();
+    await checkAndExecuteBracketOrders();
+  }, intervalMs);
 }
 
 export function stopOrderRunner() {

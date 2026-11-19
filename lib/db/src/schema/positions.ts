@@ -13,6 +13,10 @@ export const positionsTable = pgTable("positions", {
   currentPrice: numeric("current_price", { precision: 15, scale: 2 }).notNull(),
   pnl: numeric("pnl", { precision: 15, scale: 2 }).notNull().default("0"),
   unrealizedPnl: numeric("unrealized_pnl", { precision: 15, scale: 2 }).notNull().default("0"),
+  stopLoss: numeric("stop_loss", { precision: 15, scale: 2 }),
+  targetPrice: numeric("target_price", { precision: 15, scale: 2 }),
+  trailingStop: numeric("trailing_stop", { precision: 15, scale: 2 }),
+  highWaterMark: numeric("high_water_mark", { precision: 15, scale: 2 }),
   status: text("status").notNull().default("open"), // open or closed
   expiry: text("expiry").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

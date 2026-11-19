@@ -13,6 +13,11 @@ export const tradesTable = pgTable("trades", {
   entryPrice: numeric("entry_price", { precision: 15, scale: 2 }).notNull(),
   exitPrice: numeric("exit_price", { precision: 15, scale: 2 }),
   pnl: numeric("pnl", { precision: 15, scale: 2 }),
+  notes: text("notes"),
+  tags: text("tags"),
+  emotion: text("emotion"),
+  strategy: text("strategy"),
+  rating: integer("rating"),
   status: text("status").notNull().default("open"), // open or closed
   expiry: text("expiry").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

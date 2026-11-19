@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, unique, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,6 +16,8 @@ export const usersTable = pgTable("users", {
   stopLossLimit: numeric("stop_loss_limit", { precision: 15, scale: 2 }),
   targetPrice: numeric("target_price", { precision: 15, scale: 2 }),
   maxDailyLoss: numeric("max_daily_loss", { precision: 15, scale: 2 }),
+  killSwitchActive: boolean("kill_switch_active").default(false),
+  maxDailyTrades: integer("max_daily_trades").default(20),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

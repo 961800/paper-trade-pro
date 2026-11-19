@@ -15,6 +15,7 @@ export const ordersTable = pgTable("orders", {
   limitPrice: numeric("limit_price", { precision: 15, scale: 2 }),
   stopLoss: numeric("stop_loss", { precision: 15, scale: 2 }),
   targetPrice: numeric("target_price", { precision: 15, scale: 2 }),
+  trailingStop: numeric("trailing_stop", { precision: 15, scale: 2 }),
   status: text("status").notNull().default("pending"), // pending, executed, cancelled, rejected
   expiry: text("expiry").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

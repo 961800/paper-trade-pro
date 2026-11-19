@@ -11,7 +11,7 @@ import {
   getExpiries as simGetExpiries,
   getCurrentOptionPrice as simGetCurrentOptionPrice,
 } from "./market-simulator";
-import type { IndexData, OptionContract } from "./market-simulator";
+import type { IndexData, OptionContract, OptionsChainResult } from "./market-simulator";
 
 const BASE = "https://api.upstox.com/v2";
 
@@ -94,15 +94,7 @@ const ohlcCache = new Map<
   }>
 >();
 const expiriesCache = new Map<string, CacheEntry<string[]>>();
-const chainCache = new Map<
-  string,
-  CacheEntry<{
-    symbol: string;
-    expiry: string;
-    underlyingPrice: number;
-    options: OptionContract[];
-  }>
->();
+const chainCache = new Map<string, CacheEntry<OptionsChainResult>>();
 const priceCache = new Map<string, CacheEntry<number>>();
 
 // ── Upstox LTP → IndexData ──────────────────────────────────────────────────
@@ -232,12 +224,7 @@ export async function getExpiries(symbol: string): Promise<string[]> {
 export async function getOptionsChain(
   symbol: string,
   expiry?: string,
-): Promise<{
-  symbol: string;
-  expiry: string;
-  underlyingPrice: number;
-  options: OptionContract[];
-}> {
+): Promise<OptionsChainResult> {
   // Resolve expiry
   const expiries = await getExpiries(symbol);
   const selectedExpiry =
@@ -309,6 +296,9 @@ export async function getOptionsChain(
         volume: ce.volume,
         iv: ceG?.iv ?? null,
         delta: ceG?.delta ?? null,
+        gamma: ceG?.gamma ?? null,
+        theta: ceG?.theta ?? null,
+        vega: ceG?.vega ?? null,
       });
     }
 
@@ -328,11 +318,29 @@ export async function getOptionsChain(
         volume: pe.volume,
         iv: peG?.iv ?? null,
         delta: peG?.delta ?? null,
+        gamma: peG?.gamma ?? null,
+        theta: peG?.theta ?? null,
+        vega: peG?.vega ?? null,
       });
     }
   }
 
-  const result = { symbol, expiry: selectedExpiry, underlyingPrice, options };
+  let totalCallOi = 0;
+  let totalPutOi = 0;
+  for (const opt of options) {
+    if (opt.type === "CE") totalCallOi += opt.oi;
+    else if (opt.type === "PE") totalPutOi += opt.oi;
+  }
+
+  const pcr = totalCallOi > 0 ? Math.round((totalPutOi / totalCallOi) * 100) / 100 : 1;
+  let sentiment: "Strongly Bullish" | "Bullish" | "Neutral" | "Bearish" | "Strongly Bearish" = "Neutral";
+  if (pcr >= 1.25) sentiment = "Strongly Bullish";
+  else if (pcr >= 1.05) sentiment = "Bullish";
+  else if (pcr >= 0.85) sentiment = "Neutral";
+  else if (pcr >= 0.65) sentiment = "Bearish";
+  else sentiment = "Strongly Bearish";
+
+  const result = { symbol, expiry: selectedExpiry, underlyingPrice, pcr, totalCallOi, totalPutOi, sentiment, options };
   return cache(chainCache, cacheKey, result);
 }
 

@@ -45,6 +45,8 @@ export async function serializeUser(user: typeof usersTable.$inferSelect) {
     stopLossLimit: user.stopLossLimit ? parseFloat(user.stopLossLimit) : null,
     targetPrice: user.targetPrice ? parseFloat(user.targetPrice) : null,
     maxDailyLoss: user.maxDailyLoss ? parseFloat(user.maxDailyLoss) : null,
+    killSwitchActive: user.killSwitchActive ?? false,
+    maxDailyTrades: user.maxDailyTrades ?? 20,
     createdAt: user.createdAt.toISOString(),
   };
 }
@@ -148,7 +150,7 @@ router.post("/logout", (_req, res): void => {
 router.patch("/profile", async (req, res): Promise<void> => {
   if (!req.isAuthenticated() || !req.user) { res.status(401).json({ error: "Not authenticated" }); return; }
   const userId = req.userId!;
-  const { fullName, phone, city, stopLossLimit, targetPrice, maxDailyLoss } = req.body;
+  const { fullName, phone, city, stopLossLimit, targetPrice, maxDailyLoss, killSwitchActive, maxDailyTrades } = req.body;
   const updateData: Record<string, unknown> = {};
   if (fullName) updateData.fullName = fullName;
   if (phone) updateData.phone = phone;
@@ -156,8 +158,22 @@ router.patch("/profile", async (req, res): Promise<void> => {
   if (stopLossLimit !== undefined) updateData.stopLossLimit = stopLossLimit?.toString() ?? null;
   if (targetPrice !== undefined) updateData.targetPrice = targetPrice?.toString() ?? null;
   if (maxDailyLoss !== undefined) updateData.maxDailyLoss = maxDailyLoss?.toString() ?? null;
+  if (killSwitchActive !== undefined) updateData.killSwitchActive = Boolean(killSwitchActive);
+  if (maxDailyTrades !== undefined) updateData.maxDailyTrades = Number(maxDailyTrades);
   const [user] = await db.update(usersTable).set(updateData).where(eq(usersTable.id, userId)).returning();
-  res.json(serializeUser(user));
+  res.json(await serializeUser(user));
+});
+
+// POST /auth/kill-switch/toggle
+router.post("/kill-switch/toggle", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated() || !req.user) { res.status(401).json({ error: "Not authenticated" }); return; }
+  const userId = req.userId!;
+  const newStatus = !req.user.killSwitchActive;
+  const [user] = await db.update(usersTable).set({ killSwitchActive: newStatus }).where(eq(usersTable.id, userId)).returning();
+  res.json({
+    killSwitchActive: user.killSwitchActive,
+    message: newStatus ? "🚨 Emergency Kill Switch ACTIVATED. Trading is locked." : "✅ Emergency Kill Switch DEACTIVATED. Trading is resumed."
+  });
 });
 
 export { router as authRouter };

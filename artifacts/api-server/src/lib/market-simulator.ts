@@ -263,11 +263,29 @@ export function getOptionsChain(
         volume:   state.volume,
         iv:       Math.round(iv * 10000) / 100,
         delta:    Math.round(calcDelta(underlyingPrice, strike, dte / 365, iv, type) * 1000) / 1000,
+        gamma:    Math.round(calcGamma(underlyingPrice, strike, dte / 365, iv) * 10000) / 10000,
+        theta:    Math.round(calcTheta(underlyingPrice, strike, dte / 365, iv, type) * 100) / 100,
+        vega:     Math.round(calcVega(underlyingPrice, strike, dte / 365, iv) * 100) / 100,
       });
     }
   }
 
-  return { symbol, expiry: selectedExpiry, underlyingPrice, options };
+  let totalCallOi = 0;
+  let totalPutOi = 0;
+  for (const opt of options) {
+    if (opt.type === "CE") totalCallOi += opt.oi;
+    else if (opt.type === "PE") totalPutOi += opt.oi;
+  }
+
+  const pcr = totalCallOi > 0 ? Math.round((totalPutOi / totalCallOi) * 100) / 100 : 1;
+  let sentiment: "Strongly Bullish" | "Bullish" | "Neutral" | "Bearish" | "Strongly Bearish" = "Neutral";
+  if (pcr >= 1.25) sentiment = "Strongly Bullish";
+  else if (pcr >= 1.05) sentiment = "Bullish";
+  else if (pcr >= 0.85) sentiment = "Neutral";
+  else if (pcr >= 0.65) sentiment = "Bearish";
+  else sentiment = "Strongly Bearish";
+
+  return { symbol, expiry: selectedExpiry, underlyingPrice, pcr, totalCallOi, totalPutOi, sentiment, options };
 }
 
 export interface OptionContract {
@@ -283,6 +301,20 @@ export interface OptionContract {
   volume: number;
   iv: number | null;
   delta: number | null;
+  gamma: number | null;
+  theta: number | null;
+  vega: number | null;
+}
+
+export interface OptionsChainResult {
+  symbol: string;
+  expiry: string;
+  underlyingPrice: number;
+  pcr: number;
+  totalCallOi: number;
+  totalPutOi: number;
+  sentiment: "Strongly Bullish" | "Bullish" | "Neutral" | "Bearish" | "Strongly Bearish";
+  options: OptionContract[];
 }
 
 // ── Black-Scholes ───────────────────────────────────────────────────────────
@@ -310,6 +342,39 @@ function normalCDF(x: number): number {
   const poly = t * (0.3193815 + t * (-0.3565638 + t * (1.7814779 + t * (-1.8212560 + t * 1.3302744))));
   const cdf  = 1 - d * poly;
   return x > 0 ? cdf : 1 - cdf;
+}
+
+function normalPDF(x: number): number {
+  return 0.3989422804 * Math.exp(-0.5 * x * x);
+}
+
+function calcGamma(S: number, K: number, T: number, sigma: number): number {
+  if (T <= 0 || S <= 0 || sigma <= 0) return 0;
+  const r = 0.065;
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
+  return normalPDF(d1) / (S * sigma * Math.sqrt(T));
+}
+
+function calcTheta(S: number, K: number, T: number, sigma: number, type: "CE" | "PE"): number {
+  if (T <= 0) return 0;
+  const r = 0.065;
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
+  const d2 = d1 - sigma * Math.sqrt(T);
+  const term1 = -(S * normalPDF(d1) * sigma) / (2 * Math.sqrt(T));
+  if (type === "CE") {
+    const term2 = r * K * Math.exp(-r * T) * normalCDF(d2);
+    return (term1 - term2) / 365;
+  } else {
+    const term2 = r * K * Math.exp(-r * T) * normalCDF(-d2);
+    return (term1 + term2) / 365;
+  }
+}
+
+function calcVega(S: number, K: number, T: number, sigma: number): number {
+  if (T <= 0 || S <= 0 || sigma <= 0) return 0;
+  const r = 0.065;
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
+  return (S * Math.sqrt(T) * normalPDF(d1)) / 100;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

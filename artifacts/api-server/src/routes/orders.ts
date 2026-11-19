@@ -28,6 +28,7 @@ function serializeOrder(order: typeof ordersTable.$inferSelect) {
     limitPrice: order.limitPrice ? parseFloat(order.limitPrice) : null,
     stopLoss: order.stopLoss ? parseFloat(order.stopLoss) : null,
     targetPrice: order.targetPrice ? parseFloat(order.targetPrice) : null,
+    trailingStop: order.trailingStop ? parseFloat(order.trailingStop) : null,
     status: order.status,
     expiry: order.expiry,
     createdAt: order.createdAt.toISOString(),
@@ -43,9 +44,11 @@ const orderSchema = z.object({
   action:      z.enum(["buy", "sell"]),
   quantity:    z.number().int().min(1, "Quantity must be at least 1"),
   expiry:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid expiry date format"),
-  limitPrice:  z.number().positive().optional().nullable(),
-  stopLoss:    z.number().positive().optional().nullable(),
-  targetPrice: z.number().positive().optional().nullable(),
+  limitPrice:   z.number().positive().optional().nullable(),
+  stopLoss:     z.number().positive().optional().nullable(),
+  targetPrice:  z.number().positive().optional().nullable(),
+  trailingStop: z.number().positive().optional().nullable(),
+  strategy:     z.string().optional().nullable(),
 });
 
 router.use(requireAuth);
@@ -74,7 +77,52 @@ router.post("/", async (req: Request, res): Promise<void> => {
     res.status(400).json({ error: firstError });
     return;
   }
-  const { symbol, strikePrice, optionType, orderType, action, quantity, expiry, limitPrice, stopLoss, targetPrice } = parse.data;
+  const { symbol, strikePrice, optionType, orderType, action, quantity, expiry, limitPrice, stopLoss, targetPrice, trailingStop, strategy } = parse.data;
+
+  // 1. Check Kill Switch
+  if (user.killSwitchActive) {
+    res.status(403).json({
+      error: "Trading is locked: Emergency Kill Switch is ACTIVE. Disable it in Settings/Profile to resume trading."
+    });
+    return;
+  }
+
+  // 2. Check Daily Max Loss
+  if (user.maxDailyLoss && parseFloat(user.maxDailyLoss) > 0) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const closedToday = await db.select().from(tradesTable)
+      .where(and(eq(tradesTable.userId, userId), eq(tradesTable.status, "closed")));
+    const todayRealizedPnl = closedToday
+      .filter(t => new Date(t.closedAt ?? t.createdAt) >= today)
+      .reduce((sum, t) => sum + (t.pnl ? parseFloat(t.pnl) : 0), 0);
+
+    const openPositions = await db.select().from(positionsTable)
+      .where(and(eq(positionsTable.userId, userId), eq(positionsTable.status, "open")));
+    const unrealizedPnl = openPositions.reduce((sum, p) => sum + (parseFloat(p.currentPrice) - parseFloat(p.averagePrice)) * p.quantity, 0);
+
+    const netTodayPnl = todayRealizedPnl + unrealizedPnl;
+    if (netTodayPnl < 0 && Math.abs(netTodayPnl) >= parseFloat(user.maxDailyLoss)) {
+      res.status(403).json({
+        error: `Daily Loss Limit Exceeded! Your maximum allowed daily loss of ₹${parseFloat(user.maxDailyLoss).toLocaleString("en-IN")} was reached (Today's Net P&L: -₹${Math.abs(netTodayPnl).toFixed(2)}). Trading is locked for today to protect your capital.`
+      });
+      return;
+    }
+  }
+
+  // 3. Check Max Daily Trades
+  const maxTrades = user.maxDailyTrades ?? 20;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayTrades = await db.select().from(tradesTable)
+    .where(eq(tradesTable.userId, userId));
+  const todayTradesCount = todayTrades.filter(t => new Date(t.createdAt) >= todayStart).length;
+  if (todayTradesCount >= maxTrades) {
+    res.status(403).json({
+      error: `Daily Trade Cap Reached! You have completed ${todayTradesCount} trades today (Limit: ${maxTrades}). Take a break to prevent overtrading!`
+    });
+    return;
+  }
 
   // Check market status — allow orders at any time in paper trading,
   // but warn when market is closed (still process for simulation purposes)
@@ -170,13 +218,14 @@ router.post("/", async (req: Request, res): Promise<void> => {
     limitPrice: limitPrice?.toString() ?? null,
     stopLoss: stopLoss?.toString() ?? null,
     targetPrice: targetPrice?.toString() ?? null,
+    trailingStop: trailingStop?.toString() ?? null,
     status,
     expiry,
     executedAt: orderType === "market" ? new Date() : null,
   }).returning();
 
   if (orderType === "market" && finalExecutionPrice) {
-    await executeOrder(userId, order.id, symbol, strikePrice, optionType, action, quantity, finalExecutionPrice, expiry);
+    await executeOrder(userId, order.id, symbol, strikePrice, optionType, action, quantity, finalExecutionPrice, expiry, stopLoss, targetPrice, trailingStop, strategy);
   }
 
   await db.insert(notificationsTable).values({
@@ -188,6 +237,81 @@ router.post("/", async (req: Request, res): Promise<void> => {
   });
 
   res.status(201).json(serializeOrder(order));
+});
+
+// Multi-leg batch orders
+const batchOrderSchema = z.object({
+  strategyName: z.string().optional(),
+  orders: z.array(orderSchema).min(1, "At least 1 order leg required").max(6, "Max 6 legs allowed"),
+});
+
+router.post("/batch", async (req: Request, res): Promise<void> => {
+  const authReq = req as AuthReq;
+  const userId = authReq.userId;
+  const user = authReq.user;
+
+  const parse = batchOrderSchema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.errors[0]?.message ?? "Invalid batch orders" });
+    return;
+  }
+  const { strategyName, orders } = parse.data;
+
+  if (user.killSwitchActive) {
+    res.status(403).json({ error: "Trading is locked: Emergency Kill Switch is ACTIVE." });
+    return;
+  }
+
+  const results = [];
+  for (const leg of orders) {
+    const currentPrice = await getCurrentOptionPrice(leg.symbol, leg.strikePrice, leg.optionType as "CE" | "PE", leg.expiry);
+    const finalExecutionPrice = leg.orderType === "market" ? currentPrice : (leg.limitPrice ?? currentPrice);
+    const [order] = await db.insert(ordersTable).values({
+      userId,
+      symbol: leg.symbol,
+      strikePrice: leg.strikePrice.toString(),
+      optionType: leg.optionType,
+      orderType: leg.orderType,
+      action: leg.action,
+      quantity: leg.quantity,
+      executedPrice: finalExecutionPrice.toString(),
+      limitPrice: leg.limitPrice?.toString() ?? null,
+      stopLoss: leg.stopLoss?.toString() ?? null,
+      targetPrice: leg.targetPrice?.toString() ?? null,
+      trailingStop: leg.trailingStop?.toString() ?? null,
+      status: "executed",
+      expiry: leg.expiry,
+      executedAt: new Date(),
+    }).returning();
+
+    await executeOrder(
+      userId,
+      order.id,
+      leg.symbol,
+      leg.strikePrice,
+      leg.optionType,
+      leg.action,
+      leg.quantity,
+      finalExecutionPrice,
+      leg.expiry,
+      leg.stopLoss,
+      leg.targetPrice,
+      leg.trailingStop,
+      strategyName ?? "Multi-Leg"
+    );
+
+    results.push(serializeOrder(order));
+  }
+
+  await db.insert(notificationsTable).values({
+    userId,
+    type: "order_executed",
+    title: `Strategy Executed: ${strategyName ?? "Multi-Leg"}`,
+    message: `Executed ${orders.length} legs for ${orders[0].symbol} successfully.`,
+    isRead: false,
+  });
+
+  res.status(201).json({ success: true, count: results.length, orders: results });
 });
 
 

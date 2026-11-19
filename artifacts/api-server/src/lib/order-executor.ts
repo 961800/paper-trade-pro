@@ -11,7 +11,11 @@ export async function executeOrder(
   action: string,
   quantity: number,
   executionPrice: number,
-  expiry: string
+  expiry: string,
+  stopLoss?: number | null,
+  targetPrice?: number | null,
+  trailingStop?: number | null,
+  strategy?: string | null
 ) {
   if (action === "buy") {
     const totalCost = executionPrice * quantity;
@@ -32,11 +36,18 @@ export async function executeOrder(
       const pos = existing[0];
       const newQty = pos.quantity + quantity;
       const newAvg = ((parseFloat(pos.averagePrice) * pos.quantity) + (executionPrice * quantity)) / newQty;
-      await db.update(positionsTable).set({
+      const updatePayload: Record<string, any> = {
         quantity: newQty,
         averagePrice: newAvg.toString(),
         currentPrice: executionPrice.toString(),
-      }).where(eq(positionsTable.id, pos.id));
+      };
+      if (stopLoss != null) updatePayload.stopLoss = stopLoss.toString();
+      if (targetPrice != null) updatePayload.targetPrice = targetPrice.toString();
+      if (trailingStop != null) {
+        updatePayload.trailingStop = trailingStop.toString();
+        updatePayload.highWaterMark = Math.max(parseFloat(pos.highWaterMark ?? "0"), executionPrice).toString();
+      }
+      await db.update(positionsTable).set(updatePayload).where(eq(positionsTable.id, pos.id));
     } else {
       await db.insert(positionsTable).values({
         userId,
@@ -46,6 +57,10 @@ export async function executeOrder(
         quantity,
         averagePrice: executionPrice.toString(),
         currentPrice: executionPrice.toString(),
+        stopLoss: stopLoss != null ? stopLoss.toString() : null,
+        targetPrice: targetPrice != null ? targetPrice.toString() : null,
+        trailingStop: trailingStop != null ? trailingStop.toString() : null,
+        highWaterMark: executionPrice.toString(),
         pnl: "0",
         unrealizedPnl: "0",
         status: "open",
@@ -61,6 +76,7 @@ export async function executeOrder(
       action,
       quantity,
       entryPrice: executionPrice.toString(),
+      strategy: strategy ?? null,
       status: "open",
       expiry,
     });
