@@ -97,10 +97,10 @@ export function getIndexQuote(symbol: string): IndexData {
   const elapsed = (now - s.lastUpdate) / 1000;
 
   const { tradingEnabled } = getMarketStatus();
-  if (tradingEnabled && elapsed > 0.5) {
-    // Brownian motion drift — only when market is open
-    const volatility = 0.0003 * Math.sqrt(Math.min(elapsed, 10) + 0.5);
-    const drift = (Math.random() - 0.48) * volatility;
+  if (elapsed > 0.5) {
+    // Real-time Brownian motion drift: active during market hours and continuous in simulated feed
+    const volatility = (tradingEnabled ? 0.0003 : 0.0002) * Math.sqrt(Math.min(elapsed, 10) + 0.5);
+    const drift = (Math.random() - 0.49) * volatility;
     s.ltp = Math.round((s.ltp * (1 + drift)) * 100) / 100;
     s.high = Math.max(s.high, s.ltp);
     s.low  = Math.min(s.low, s.ltp);
@@ -235,19 +235,17 @@ export function getOptionsChain(
 
       const state = getOrInitOption(symbol, selectedExpiry, strike, type, initialLtp, initialBid, initialAsk, moneyness);
 
-      if (tradingEnabled) {
-        const elapsed = (Date.now() - state.lastUpdate) / 1000;
-        if (elapsed > 0.5) {
-          // Recalculate LTP based on current underlying — realistic re-pricing
-          const newFair   = calcOptionPremium(underlyingPrice, strike, dte / 365, iv, type);
-          const newSpread = Math.max(0.05, newFair * 0.015);
-          state.ltp       = Math.max(0.05, Math.round(newFair * 100) / 100);
-          state.bidPrice  = Math.max(0.05, Math.round((newFair - newSpread) * 100) / 100);
-          state.askPrice  = Math.round((newFair + newSpread) * 100) / 100;
-          // Volume grows during market hours
-          state.volume    = Math.min(state.volume + Math.floor(Math.random() * 8), baseVolume(moneyness) * 2);
-          state.lastUpdate = Date.now();
-        }
+      const elapsed = (Date.now() - state.lastUpdate) / 1000;
+      if (elapsed > 0.5) {
+        // Recalculate LTP based on current underlying — continuous real-time option re-pricing
+        const newFair   = calcOptionPremium(underlyingPrice, strike, dte / 365, iv, type);
+        const newSpread = Math.max(0.05, newFair * 0.015);
+        state.ltp       = Math.max(0.05, Math.round(newFair * 100) / 100);
+        state.bidPrice  = Math.max(0.05, Math.round((newFair - newSpread) * 100) / 100);
+        state.askPrice  = Math.round((newFair + newSpread) * 100) / 100;
+        // Volume and OI micro-growth to reflect real-time market activity
+        state.volume    = state.volume + Math.floor(Math.random() * 6);
+        state.lastUpdate = Date.now();
       }
 
       options.push({
@@ -277,6 +275,28 @@ export function getOptionsChain(
     else if (opt.type === "PE") totalPutOi += opt.oi;
   }
 
+  // Calculate Max Pain: strike price that minimizes total buyer payout
+  let minLoss = Infinity;
+  let maxPain = atmStrike;
+  for (const testStrike of strikes) {
+    let totalLoss = 0;
+    for (const opt of options) {
+      if (opt.type === "CE" && testStrike > opt.strikePrice) {
+        totalLoss += (testStrike - opt.strikePrice) * opt.oi;
+      } else if (opt.type === "PE" && testStrike < opt.strikePrice) {
+        totalLoss += (opt.strikePrice - testStrike) * opt.oi;
+      }
+    }
+    if (totalLoss < minLoss) {
+      minLoss = totalLoss;
+      maxPain = testStrike;
+    }
+  }
+
+  // ATM Implied Volatility
+  const atmOption = options.find((o) => o.strikePrice === atmStrike && o.type === "CE");
+  const atmIv = atmOption?.iv ?? 14.5;
+
   const pcr = totalCallOi > 0 ? Math.round((totalPutOi / totalCallOi) * 100) / 100 : 1;
   let sentiment: "Strongly Bullish" | "Bullish" | "Neutral" | "Bearish" | "Strongly Bearish" = "Neutral";
   if (pcr >= 1.25) sentiment = "Strongly Bullish";
@@ -285,7 +305,19 @@ export function getOptionsChain(
   else if (pcr >= 0.65) sentiment = "Bearish";
   else sentiment = "Strongly Bearish";
 
-  return { symbol, expiry: selectedExpiry, underlyingPrice, pcr, totalCallOi, totalPutOi, sentiment, options };
+  return {
+    symbol,
+    expiry: selectedExpiry,
+    underlyingPrice,
+    atmStrike,
+    maxPain,
+    atmIv,
+    pcr,
+    totalCallOi,
+    totalPutOi,
+    sentiment,
+    options,
+  };
 }
 
 export interface OptionContract {

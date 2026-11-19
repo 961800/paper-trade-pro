@@ -237,7 +237,7 @@ async function fetchOhlc(
 }
 
 export async function getAllIndices(): Promise<IndexData[]> {
-  const CACHE_TTL = getMarketStatus().tradingEnabled ? 1500 : 60000;
+  const CACHE_TTL = 1500;
   const hit = cached(indicesCache, "all", CACHE_TTL);
   if (hit) return hit;
 
@@ -333,7 +333,7 @@ export async function getOptionsChain(
   if (!selectedExpiry) return simGetOptionsChain(symbol, expiry);
 
   const cacheKey = `${symbol}:${selectedExpiry}`;
-  const CACHE_TTL = getMarketStatus().tradingEnabled ? 2000 : 60000;
+  const CACHE_TTL = 2000;
   const hit = cached(chainCache, cacheKey, CACHE_TTL);
   if (hit) return hit;
 
@@ -433,6 +433,30 @@ export async function getOptionsChain(
     else if (opt.type === "PE") totalPutOi += opt.oi;
   }
 
+  const strikeInterval = symbol === "SENSEX" ? 500 : symbol === "BANKNIFTY" ? 200 : 100;
+  const atmStrike = Math.round(underlyingPrice / strikeInterval) * strikeInterval;
+
+  let minLoss = Infinity;
+  let maxPain = atmStrike;
+  const strikes = Array.from(new Set(options.map((o) => o.strikePrice)));
+  for (const testStrike of strikes) {
+    let totalLoss = 0;
+    for (const opt of options) {
+      if (opt.type === "CE" && testStrike > opt.strikePrice) {
+        totalLoss += (testStrike - opt.strikePrice) * opt.oi;
+      } else if (opt.type === "PE" && testStrike < opt.strikePrice) {
+        totalLoss += (opt.strikePrice - testStrike) * opt.oi;
+      }
+    }
+    if (totalLoss < minLoss) {
+      minLoss = totalLoss;
+      maxPain = testStrike;
+    }
+  }
+
+  const atmOption = options.find((o) => o.strikePrice === atmStrike && o.type === "CE");
+  const atmIv = atmOption?.iv ?? 14.5;
+
   const pcr = totalCallOi > 0 ? Math.round((totalPutOi / totalCallOi) * 100) / 100 : 1;
   let sentiment: "Strongly Bullish" | "Bullish" | "Neutral" | "Bearish" | "Strongly Bearish" = "Neutral";
   if (pcr >= 1.25) sentiment = "Strongly Bullish";
@@ -441,7 +465,19 @@ export async function getOptionsChain(
   else if (pcr >= 0.65) sentiment = "Bearish";
   else sentiment = "Strongly Bearish";
 
-  const result = { symbol, expiry: selectedExpiry, underlyingPrice, pcr, totalCallOi, totalPutOi, sentiment, options };
+  const result = {
+    symbol,
+    expiry: selectedExpiry,
+    underlyingPrice,
+    atmStrike,
+    maxPain,
+    atmIv,
+    pcr,
+    totalCallOi,
+    totalPutOi,
+    sentiment,
+    options,
+  };
   return cache(chainCache, cacheKey, result);
 }
 

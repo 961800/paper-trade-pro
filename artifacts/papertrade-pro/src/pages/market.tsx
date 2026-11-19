@@ -28,7 +28,11 @@ import {
   TrendingUp, 
   TrendingDown, 
   Info,
-  BarChart2
+  BarChart2,
+  Target,
+  Crosshair,
+  Activity,
+  Sparkles
 } from "lucide-react";
 
 const TV_SYMBOLS: Record<string, string> = {
@@ -73,6 +77,8 @@ export default function Market() {
     setIsChartModalOpen(true);
   };
 
+  const [strikeFilter, setStrikeFilter] = useState<"atm5" | "atm10" | "all">("atm5");
+
   useEffect(() => {
     customFetch<any>("/api/market/upstox-status")
       .then((data) => setUpstoxStatus(data))
@@ -80,7 +86,7 @@ export default function Market() {
   }, []);
 
   const { data: indices, isLoading: indicesLoading, refetch: refetchIndices } = useGetIndices({
-    query: { queryKey: getGetIndicesQueryKey(), refetchInterval: 10000 },
+    query: { queryKey: getGetIndicesQueryKey(), refetchInterval: 2500 },
   });
 
   const { data: expiries } = useGetExpiries(
@@ -102,7 +108,7 @@ export default function Market() {
       query: {
         queryKey: getGetOptionsChainQueryKey({ symbol: selectedSymbol, expiry: selectedExpiry || "2026-06-26" }),
         enabled: !!selectedExpiry,
-        refetchInterval: 10000,
+        refetchInterval: 2500,
       },
     }
   );
@@ -111,9 +117,22 @@ export default function Market() {
 
   const strikeInterval = selectedSymbol === "SENSEX" ? 500 : selectedSymbol === "BANKNIFTY" ? 200 : 100;
   const atmStrike = chain ? Math.round(chain.underlyingPrice / strikeInterval) * strikeInterval : 0;
-  const strikes = chain
+  const allStrikes = chain
     ? Array.from(new Set(chain.options.map((o: any) => o.strikePrice))).sort((a: any, b: any) => a - b) as number[]
     : [];
+
+  // Filter strikes so ATM is directly visible without scrolling!
+  const strikes = allStrikes.filter((s) => {
+    if (strikeFilter === "atm5") return Math.abs(s - atmStrike) <= 5 * strikeInterval;
+    if (strikeFilter === "atm10") return Math.abs(s - atmStrike) <= 10 * strikeInterval;
+    return true;
+  });
+
+  const atmCe = chain?.options?.find((o: any) => o.strikePrice === atmStrike && o.type === "CE");
+  const atmPe = chain?.options?.find((o: any) => o.strikePrice === atmStrike && o.type === "PE");
+  const straddleCost = (atmCe?.ltp ?? 0) + (atmPe?.ltp ?? 0);
+  const maxPain = chain?.maxPain ?? atmStrike;
+  const atmIv = chain?.atmIv ?? 14.2;
 
   const pcr = chain?.pcr ?? 1;
   const sentiment = chain?.sentiment ?? "Neutral";
@@ -168,42 +187,63 @@ export default function Market() {
           </div>
         </div>
 
-        {/* Index Cards */}
+        {/* Live Index Tickers */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {indicesLoading
-            ? Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
-            : indices?.map((idx) => (
-                <Card
-                  key={idx.symbol}
-                  onClick={() => setSelectedSymbol(idx.symbol)}
-                  className={cn(
-                    "cursor-pointer transition-all hover:border-primary/60",
-                    selectedSymbol === idx.symbol && "border-primary bg-primary/5 ring-1 ring-primary/40"
-                  )}
-                >
-                  <CardContent className="p-4">
-                    <p className="text-xs text-muted-foreground font-medium">{idx.name}</p>
-                    <p className="text-xl font-bold font-mono mt-1">
-                      ₹{idx.ltp.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                    </p>
-                    <p className={cn("text-xs font-mono mt-1 flex items-center gap-0.5", idx.change >= 0 ? "text-green-500" : "text-red-500")}>
-                      {idx.change >= 0 ? <ArrowUpIcon className="w-3 h-3" /> : <ArrowDownIcon className="w-3 h-3" />}
-                      {idx.change >= 0 ? "+" : ""}{idx.change.toFixed(2)} ({idx.changePercent.toFixed(2)}%)
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+            ? Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
+            : indices?.map((idx) => {
+                const isSelected = selectedSymbol === idx.symbol;
+                const isUp = idx.change >= 0;
+                return (
+                  <Card
+                    key={idx.symbol}
+                    onClick={() => {
+                      setSelectedSymbol(idx.symbol);
+                      setShowChart(true);
+                    }}
+                    className={cn(
+                      "cursor-pointer transition-all hover:border-primary/60 relative overflow-hidden",
+                      isSelected && "border-primary bg-primary/5 ring-1 ring-primary/40 shadow-md"
+                    )}
+                  >
+                    <CardContent className="p-3.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-semibold">{idx.name}</span>
+                        <span className="flex items-center gap-1 text-[10px] font-mono font-medium text-muted-foreground">
+                          <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isUp ? "bg-green-500" : "bg-red-500")} />
+                          LIVE
+                        </span>
+                      </div>
+                      <p className="text-xl font-bold font-mono mt-1 text-foreground">
+                        ₹{idx.ltp.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                      </p>
+                      <div className="flex items-center justify-between mt-1 text-xs font-mono">
+                        <span className={cn("flex items-center gap-0.5 font-bold", isUp ? "text-green-500" : "text-red-500")}>
+                          {isUp ? <ArrowUpIcon className="w-3 h-3" /> : <ArrowDownIcon className="w-3 h-3" />}
+                          {isUp ? "+" : ""}{idx.change.toFixed(2)} ({idx.changePercent.toFixed(2)}%)
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          H: ₹{idx.high?.toFixed(0)} L: ₹{idx.low?.toFixed(0)}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
         </div>
 
-        {/* Embedded Interactive TradingView Candlestick Chart */}
+        {/* Embedded Interactive Fyers / TradingView Candlestick Chart */}
         {showChart && (
           <Card className="overflow-hidden border-primary/30 shadow-lg">
             <CardHeader className="py-2.5 px-4 bg-muted/40 border-b border-border flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <LineChart className="w-4 h-4 text-primary" />
-                <CardTitle className="text-sm font-semibold">{selectedSymbol} Live Candlestick Chart</CardTitle>
+                <CardTitle className="text-sm font-semibold">{selectedSymbol} Fyers / TradingView Technical Chart</CardTitle>
+                <Badge variant="outline" className="text-[10px] text-primary border-primary/40">
+                  Real-Time Multi-Indicators
+                </Badge>
               </div>
-              <span className="text-xs text-muted-foreground">Powered by TradingView</span>
+              <span className="text-xs text-muted-foreground">Includes RSI, MACD, Volume & EMAs</span>
             </CardHeader>
             <CardContent className="p-0">
               <div className="h-[440px] w-full">
@@ -217,24 +257,92 @@ export default function Market() {
           </Card>
         )}
 
-        {/* PCR & Market Sentiment Analytics Banner */}
+        {/* DIRECT ATM QUICK INSIGHT BANNER */}
+        {chain && atmStrike > 0 && (
+          <Card className="border-primary/50 bg-gradient-to-r from-primary/10 via-card to-card shadow-md">
+            <CardContent className="p-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0">
+                  <Target className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-primary inline" /> Direct ATM Focus
+                    </span>
+                    <Badge className="bg-primary text-primary-foreground font-mono font-bold text-xs px-2 py-0.5">
+                      {selectedSymbol} {atmStrike.toLocaleString("en-IN")} ATM
+                    </Badge>
+                    <span className="text-xs text-muted-foreground font-mono">
+                      Spot Index: ₹{chain.underlyingPrice.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 mt-1.5 text-xs font-mono flex-wrap">
+                    <span className="text-green-400 font-bold">
+                      ATM Call (CE): ₹{atmCe?.ltp?.toFixed(2) ?? "-"} (Δ {atmCe?.delta?.toFixed(2) ?? "0.51"})
+                    </span>
+                    <span className="text-red-400 font-bold">
+                      ATM Put (PE): ₹{atmPe?.ltp?.toFixed(2) ?? "-"} (Δ {atmPe?.delta?.toFixed(2) ?? "-0.49"})
+                    </span>
+                    <span className="text-muted-foreground">
+                      Straddle: ₹{straddleCost.toFixed(2)}
+                    </span>
+                    <span className="text-amber-400 font-semibold">
+                      Max Pain: ₹{maxPain.toLocaleString("en-IN")}
+                    </span>
+                    <span className="text-cyan-400">
+                      ATM IV: {atmIv}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  className="h-8 bg-green-600 hover:bg-green-500 text-white font-bold text-xs gap-1 shadow-sm"
+                  onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${atmStrike}&type=CE&expiry=${selectedExpiry}&action=buy`)}
+                >
+                  Buy ATM Call @ ₹{atmCe?.ltp?.toFixed(2) ?? "-"}
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 bg-red-600 hover:bg-red-500 text-white font-bold text-xs gap-1 shadow-sm"
+                  onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${atmStrike}&type=PE&expiry=${selectedExpiry}&action=buy`)}
+                >
+                  Buy ATM Put @ ₹{atmPe?.ltp?.toFixed(2) ?? "-"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-primary/40 text-primary hover:bg-primary/10 gap-1 font-semibold"
+                  onClick={() => handleOpenStrikeChart(atmStrike, "CE")}
+                >
+                  <BarChart2 className="w-3.5 h-3.5" /> ATM Candlestick Chart
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* PCR & Advanced Derivatives Analytics Banner */}
         {chain && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="bg-card/60 border-border">
-              <CardContent className="p-3.5 flex items-center justify-between">
+              <CardContent className="p-3 flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Put-Call Ratio (PCR)</p>
                   <p className="text-xl font-bold font-mono mt-0.5">{pcr.toFixed(2)}</p>
                 </div>
-                <Badge variant="outline" className={cn("text-xs font-semibold px-2.5 py-1", sentimentColor)}>
+                <Badge variant="outline" className={cn("text-xs font-semibold px-2 py-0.5", sentimentColor)}>
                   {sentiment}
                 </Badge>
               </CardContent>
             </Card>
 
             <Card className="bg-card/60 border-border">
-              <CardContent className="p-3.5">
-                <p className="text-xs text-muted-foreground font-medium">Total Call OI</p>
+              <CardContent className="p-3">
+                <p className="text-xs text-muted-foreground font-medium">Total Call OI (Resistance)</p>
                 <p className="text-lg font-bold font-mono text-green-400 mt-0.5">
                   {(chain.totalCallOi ?? 0).toLocaleString("en-IN")}
                 </p>
@@ -242,8 +350,8 @@ export default function Market() {
             </Card>
 
             <Card className="bg-card/60 border-border">
-              <CardContent className="p-3.5">
-                <p className="text-xs text-muted-foreground font-medium">Total Put OI</p>
+              <CardContent className="p-3">
+                <p className="text-xs text-muted-foreground font-medium">Total Put OI (Support)</p>
                 <p className="text-lg font-bold font-mono text-red-400 mt-0.5">
                   {(chain.totalPutOi ?? 0).toLocaleString("en-IN")}
                 </p>
@@ -251,11 +359,11 @@ export default function Market() {
             </Card>
 
             <Card className="bg-card/60 border-border">
-              <CardContent className="p-3.5">
-                <p className="text-xs text-muted-foreground font-medium">ATM Strike</p>
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-lg font-bold font-mono text-primary">{atmStrike.toLocaleString("en-IN")}</span>
-                  <span className="text-[11px] text-muted-foreground">Spot: ₹{chain.underlyingPrice.toFixed(0)}</span>
+              <CardContent className="p-3">
+                <p className="text-xs text-muted-foreground font-medium">Max Pain & ATM IV</p>
+                <div className="flex items-center justify-between mt-0.5 font-mono">
+                  <span className="text-lg font-bold text-amber-400">₹{maxPain.toLocaleString("en-IN")}</span>
+                  <span className="text-xs text-cyan-400 font-semibold">{atmIv}% IV</span>
                 </div>
               </CardContent>
             </Card>
@@ -281,23 +389,58 @@ export default function Market() {
             </div>
           )}
 
-          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
-            <Button
-              size="sm"
-              variant={viewMode === "prices" ? "secondary" : "ghost"}
-              className="h-6 text-xs px-2.5"
-              onClick={() => setViewMode("prices")}
-            >
-              Prices & Volume
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "greeks" ? "secondary" : "ghost"}
-              className="h-6 text-xs px-2.5"
-              onClick={() => setViewMode("greeks")}
-            >
-              Option Greeks (Δ, Γ, Θ, ν)
-            </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Strike Range Direct Filter */}
+            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
+              <span className="text-xs text-muted-foreground px-1.5 font-medium">Strikes:</span>
+              <button
+                onClick={() => setStrikeFilter("atm5")}
+                className={cn(
+                  "px-2 py-0.5 text-xs font-semibold rounded transition-all",
+                  strikeFilter === "atm5" ? "bg-primary text-primary-foreground shadow-sm font-bold" : "text-muted-foreground hover:text-foreground"
+                )}
+                title="Directly display ATM and 5 strikes above/below"
+              >
+                ATM ± 5 (Direct View)
+              </button>
+              <button
+                onClick={() => setStrikeFilter("atm10")}
+                className={cn(
+                  "px-2 py-0.5 text-xs font-semibold rounded transition-all",
+                  strikeFilter === "atm10" ? "bg-primary text-primary-foreground shadow-sm font-bold" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                ATM ± 10
+              </button>
+              <button
+                onClick={() => setStrikeFilter("all")}
+                className={cn(
+                  "px-2 py-0.5 text-xs font-semibold rounded transition-all",
+                  strikeFilter === "all" ? "bg-primary text-primary-foreground shadow-sm font-bold" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                All Strikes
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
+              <Button
+                size="sm"
+                variant={viewMode === "prices" ? "secondary" : "ghost"}
+                className="h-6 text-xs px-2.5"
+                onClick={() => setViewMode("prices")}
+              >
+                Prices & Volume
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "greeks" ? "secondary" : "ghost"}
+                className="h-6 text-xs px-2.5"
+                onClick={() => setViewMode("greeks")}
+              >
+                Option Greeks (Δ, Γ, Θ, ν)
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -364,7 +507,13 @@ export default function Market() {
 
                       if (viewMode === "prices") {
                         return (
-                          <tr key={strike} className={cn("border-b border-border/40 hover:bg-muted/20 transition-colors", isAtm && "bg-primary/5")}>
+                          <tr
+                            key={strike}
+                            className={cn(
+                              "border-b border-border/40 hover:bg-muted/20 transition-colors",
+                              isAtm && "bg-primary/15 border-y-2 border-primary/60 font-semibold"
+                            )}
+                          >
                             <td className="px-3 py-2 text-muted-foreground font-mono">{ce?.oi?.toLocaleString("en-IN") ?? "-"}</td>
                             <td className="px-3 py-2 text-right text-muted-foreground font-mono">{ce?.volume?.toLocaleString("en-IN") ?? "-"}</td>
                             <td className="px-3 py-2 text-right text-muted-foreground">{ce?.iv?.toFixed(1) ?? "-"}</td>
@@ -392,10 +541,17 @@ export default function Market() {
                             <td className={cn("px-4 py-2 text-center font-bold font-mono", isAtm ? "text-primary" : "text-foreground")}>
                               <button
                                 onClick={() => handleOpenStrikeChart(strike, "CE")}
-                                className="group hover:text-primary hover:bg-primary/10 px-2 py-0.5 rounded transition-all inline-flex items-center gap-1 font-bold font-mono"
+                                className={cn(
+                                  "group hover:text-primary hover:bg-primary/10 px-2 py-0.5 rounded transition-all inline-flex items-center gap-1 font-bold font-mono",
+                                  isAtm && "bg-primary/20 ring-1 ring-primary/40"
+                                )}
                                 title="Click to open real-time candlestick chart (Groww style)"
                               >
-                                {isAtm && <span className="text-[9px] text-primary mr-0.5 font-normal border border-primary/40 px-1 rounded">ATM</span>}
+                                {isAtm && (
+                                  <span className="text-[9px] bg-primary text-primary-foreground font-bold px-1.5 py-0.5 rounded mr-0.5 animate-pulse">
+                                    ATM
+                                  </span>
+                                )}
                                 <span>{strike.toLocaleString("en-IN")}</span>
                                 <BarChart2 className="w-3 h-3 text-muted-foreground group-hover:text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
                               </button>
@@ -429,7 +585,13 @@ export default function Market() {
                       } else {
                         // Greeks view
                         return (
-                          <tr key={strike} className={cn("border-b border-border/40 hover:bg-muted/20 transition-colors", isAtm && "bg-primary/5")}>
+                          <tr
+                            key={strike}
+                            className={cn(
+                              "border-b border-border/40 hover:bg-muted/20 transition-colors",
+                              isAtm && "bg-primary/15 border-y-2 border-primary/60 font-semibold"
+                            )}
+                          >
                             <td className="px-3 py-2 font-mono font-semibold text-green-400">{ce?.delta != null ? ce.delta.toFixed(3) : "-"}</td>
                             <td className="px-3 py-2 text-right font-mono text-muted-foreground">{ce?.gamma != null ? ce.gamma.toFixed(4) : "-"}</td>
                             <td className="px-3 py-2 text-right font-mono text-amber-400">{ce?.theta != null ? `₹${ce.theta.toFixed(1)}` : "-"}</td>
