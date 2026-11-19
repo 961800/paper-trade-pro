@@ -29,7 +29,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, session.userId)).limit(1);
-  if (!user) {
+  if (!user || user.isBanned) {
     await clearSession(res, sid);
     next();
     return;

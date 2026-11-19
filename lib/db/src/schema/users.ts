@@ -18,6 +18,7 @@ export const usersTable = pgTable("users", {
   maxDailyLoss: numeric("max_daily_loss", { precision: 15, scale: 2 }),
   killSwitchActive: boolean("kill_switch_active").default(false),
   maxDailyTrades: integer("max_daily_trades").default(20),
+  isBanned: boolean("is_banned").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

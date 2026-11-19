@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { sessionsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -32,6 +32,10 @@ export async function getSession(sid: string): Promise<SessionData | null> {
 
 export async function deleteSession(sid: string): Promise<void> {
   await db.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
+}
+
+export async function deleteUserSessions(userId: number): Promise<void> {
+  await db.execute(sql`DELETE FROM sessions WHERE sess->>'userId' = ${userId.toString()}`);
 }
 
 export async function clearSession(res: Response, sid?: string): Promise<void> {

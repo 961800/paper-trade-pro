@@ -50,6 +50,7 @@ export async function serializeUser(user: typeof usersTable.$inferSelect) {
     maxDailyLoss: user.maxDailyLoss ? parseFloat(user.maxDailyLoss) : null,
     killSwitchActive: user.killSwitchActive ?? false,
     maxDailyTrades: user.maxDailyTrades ?? 20,
+    isBanned: user.isBanned ?? false,
     isAdmin: await isUserAdmin(user.email),
     createdAt: user.createdAt.toISOString(),
   };
@@ -218,6 +219,10 @@ router.post("/login", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
+  if (user.isBanned) {
+    res.status(403).json({ error: "Your account has been suspended by an administrator." });
+    return;
+  }
   const sid = await createSession({ userId: user.id });
   setSessionCookie(res, sid);
   res.json({ user: await serializeUser(user), token: sid });
@@ -241,6 +246,11 @@ router.post("/login-otp/send", async (req, res): Promise<void> => {
 
   if (!user) {
     res.status(404).json({ error: "No account found with this Gmail address. Please register first." });
+    return;
+  }
+
+  if (user.isBanned) {
+    res.status(403).json({ error: "This account has been suspended by an administrator." });
     return;
   }
 
@@ -322,6 +332,11 @@ router.post("/login-otp/verify", async (req, res): Promise<void> => {
 
   if (!user) {
     res.status(404).json({ error: "User account not found." });
+    return;
+  }
+
+  if (user.isBanned) {
+    res.status(403).json({ error: "Your account has been suspended by an administrator." });
     return;
   }
 
