@@ -5,6 +5,8 @@ import {
   useGetIndices,
   useGetOptionsChain,
   useGetExpiries,
+  useGetMarketStatus,
+  getGetMarketStatusQueryKey,
   getGetOptionsChainQueryKey,
   getGetExpiriesQueryKey,
   getGetIndicesQueryKey,
@@ -38,6 +40,11 @@ export default function Market() {
       .catch(() => {});
   }, []);
 
+  const { data: marketStatus } = useGetMarketStatus({
+    query: { queryKey: getGetMarketStatusQueryKey(), refetchInterval: 15000 },
+  });
+  const isMarketOpen = marketStatus?.status === "open";
+
   const { data: indices, isLoading: indicesLoading, refetch: refetchIndices } = useGetIndices({
     query: { queryKey: getGetIndicesQueryKey(), refetchInterval: 2500 },
   });
@@ -68,7 +75,7 @@ export default function Market() {
 
   const chain = rawChain as any;
 
-  const strikeInterval = selectedSymbol === "SENSEX" ? 500 : selectedSymbol === "BANKNIFTY" ? 200 : 100;
+  const strikeInterval = selectedSymbol === "NIFTY" || selectedSymbol === "FINNIFTY" ? 50 : 100;
   const atmStrike = chain ? Math.round(chain.underlyingPrice / strikeInterval) * strikeInterval : 0;
   const allStrikes = chain
     ? Array.from(new Set(chain.options.map((o: any) => o.strikePrice))).sort((a: any, b: any) => a - b) as number[]
@@ -115,13 +122,28 @@ export default function Market() {
                 className={cn(
                   "text-xs gap-1.5 px-2.5 py-1 font-medium",
                   upstoxStatus.connected
-                    ? "bg-green-500/10 text-green-400 border-green-500/30"
+                    ? isMarketOpen
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      : "bg-blue-500/10 text-blue-400 border-blue-500/30"
                     : "bg-amber-500/10 text-amber-400 border-amber-500/30"
                 )}
                 title={upstoxStatus.hint}
               >
-                <span className={cn("w-1.5 h-1.5 rounded-full", upstoxStatus.connected ? "bg-green-400 animate-pulse" : "bg-amber-400")} />
-                {upstoxStatus.connected ? "Upstox Live Feed" : "Simulated Feed"}
+                <span
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    upstoxStatus.connected
+                      ? isMarketOpen
+                        ? "bg-emerald-400 animate-pulse"
+                        : "bg-blue-400"
+                      : "bg-amber-400"
+                  )}
+                />
+                {upstoxStatus.connected
+                  ? isMarketOpen
+                    ? "Upstox Live Feed"
+                    : "Upstox · Market Closed"
+                  : "Simulated Feed"}
               </Badge>
             )}
             <Button variant="outline" size="sm" onClick={() => { refetchIndices(); refetchChain(); }}>
@@ -152,8 +174,17 @@ export default function Market() {
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground font-semibold">{idx.name}</span>
                         <span className="flex items-center gap-1 text-[10px] font-mono font-medium text-muted-foreground">
-                          <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isUp ? "bg-green-500" : "bg-red-500")} />
-                          LIVE
+                          <span
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              isMarketOpen
+                                ? isUp
+                                  ? "bg-emerald-500 animate-pulse"
+                                  : "bg-rose-500 animate-pulse"
+                                : "bg-slate-500"
+                            )}
+                          />
+                          {isMarketOpen ? "LIVE" : "CLOSED"}
                         </span>
                       </div>
                       <p className="text-xl font-bold font-mono mt-1 text-foreground">

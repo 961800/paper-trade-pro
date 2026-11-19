@@ -120,8 +120,8 @@ async function upstoxFetch<T>(path: string): Promise<T | null> {
   }
 }
 
-export function getUpstoxConnectionStatus() {
-  const tok = token();
+export async function getUpstoxConnectionStatus() {
+  const tok = await fetchToken();
   const isJwt = tok.startsWith("eyJ");
   return {
     configured: Boolean(tok),
@@ -130,7 +130,7 @@ export function getUpstoxConnectionStatus() {
     mode: lastUpstoxStatus.connected ? "live_upstox" : "simulated_black_scholes",
     lastError: lastUpstoxStatus.lastError,
     hint: !tok
-      ? "Set UPSTOX_ACCESS_TOKEN in your Render environment variables to enable live data."
+      ? "Set UPSTOX_ACCESS_TOKEN in your environment or database to enable live data."
       : !isJwt
       ? "Warning: Your token is an API Key, not an Access Token. Upstox API v2 requires an active OAuth Access Token (starts with eyJ...). Generate it in your Upstox Developer Console."
       : lastUpstoxStatus.connected
@@ -198,44 +198,7 @@ const expiriesCache = new Map<string, CacheEntry<string[]>>();
 const chainCache = new Map<string, CacheEntry<OptionsChainResult>>();
 const priceCache = new Map<string, CacheEntry<number>>();
 
-// ── Upstox LTP → IndexData ──────────────────────────────────────────────────
-async function fetchOhlc(
-  symbol: string,
-): Promise<{
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  prevClose: number;
-} | null> {
-  const hit = cached(ohlcCache, symbol, 5000);
-  if (hit) return hit;
-
-  const key = encodeURIComponent(INSTRUMENT_KEY[symbol]);
-  const data = await upstoxFetch<
-    Record<
-      string,
-      {
-        ohlc: { open: number; high: number; low: number; close: number };
-        last_price: number;
-      }
-    >
-  >(`/market-quote/ohlc?instrument_key=${key}&interval=1d`);
-  if (!data) return null;
-
-  const entry = Object.values(data)[0];
-  if (!entry) return null;
-
-  const result = {
-    open: entry.ohlc.open,
-    high: entry.ohlc.high,
-    low: entry.ohlc.low,
-    close: entry.ohlc.close,
-    prevClose: entry.ohlc.close, // Upstox gives today's close; use it as prevClose reference
-  };
-  return cache(ohlcCache, symbol, result);
-}
-
+// ── Upstox Quotes → IndexData ───────────────────────────────────────────────
 export async function getAllIndices(): Promise<IndexData[]> {
   const CACHE_TTL = 1500;
   const hit = cached(indicesCache, "all", CACHE_TTL);
@@ -246,53 +209,55 @@ export async function getAllIndices(): Promise<IndexData[]> {
     .map((s) => encodeURIComponent(INSTRUMENT_KEY[s]))
     .join("%2C");
 
-  type LtpResponse = Record<
-    string,
-    { last_price: number; instrument_token: string }
-  >;
-  const ltpData = await upstoxFetch<LtpResponse>(
-    `/market-quote/ltp?instrument_key=${keys}`,
+  interface UpstoxQuoteEntry {
+    last_price: number;
+    net_change?: number;
+    ohlc?: { open: number; high: number; low: number; close: number };
+  }
+
+  const quotesData = await upstoxFetch<Record<string, UpstoxQuoteEntry>>(
+    `/market-quote/quotes?instrument_key=${keys}`,
   );
 
-  if (!ltpData) {
+  if (!quotesData) {
     // Fall back to simulator
     return simGetAllIndices();
   }
 
-  const results: IndexData[] = await Promise.all(
-    symbols.map(async (symbol) => {
-      const ltpKey = Object.keys(ltpData).find(
-        (k) =>
-          k.includes(INSTRUMENT_KEY[symbol].split("|")[1]) ||
-          k.replace(":", "|") === INSTRUMENT_KEY[symbol],
-      );
-      const ltp = ltpKey
-        ? ltpData[ltpKey].last_price
-        : getIndexQuote(symbol).ltp;
+  const results: IndexData[] = symbols.map((symbol) => {
+    const rawKey = INSTRUMENT_KEY[symbol];
+    const match = Object.entries(quotesData).find(
+      ([k]) => k.replace(":", "|") === rawKey || k.includes(rawKey.split("|")[1]),
+    );
+    const item = match?.[1];
+    const simQuote = getIndexQuote(symbol);
 
-      const ohlc = await fetchOhlc(symbol);
-      const simQuote = getIndexQuote(symbol);
+    if (!item || item.last_price == null) {
+      return simQuote;
+    }
 
-      const open = ohlc?.open ?? simQuote.open;
-      const high = Math.max(ohlc?.high ?? simQuote.high, ltp);
-      const low = Math.min(ohlc?.low ?? simQuote.low, ltp);
-      const prevClose = ohlc?.close ?? simQuote.prevClose;
-      const change = Math.round((ltp - prevClose) * 100) / 100;
-      const changePercent = Math.round((change / prevClose) * 10000) / 100;
+    const ltp = item.last_price;
+    const netChange = typeof item.net_change === "number" ? item.net_change : 0;
+    // Real-time calculation: prevClose = last_price - net_change
+    const prevClose = netChange !== 0 ? Math.round((ltp - netChange) * 100) / 100 : (item.ohlc?.close ?? simQuote.prevClose);
+    const change = Math.round(netChange * 100) / 100;
+    const changePercent = prevClose > 0 ? Math.round((change / prevClose) * 10000) / 100 : 0;
+    const open = item.ohlc?.open ?? simQuote.open;
+    const high = Math.max(item.ohlc?.high ?? simQuote.high, ltp);
+    const low = Math.min(item.ohlc?.low ?? simQuote.low, ltp);
 
-      return {
-        symbol,
-        name: FULL_NAME[symbol],
-        ltp,
-        change,
-        changePercent,
-        open,
-        high,
-        low,
-        prevClose,
-      };
-    }),
-  );
+    return {
+      symbol,
+      name: FULL_NAME[symbol] ?? symbol,
+      ltp,
+      change,
+      changePercent,
+      open,
+      high,
+      low,
+      prevClose,
+    };
+  });
 
   return cache(indicesCache, "all", results);
 }
@@ -388,7 +353,7 @@ export async function getOptionsChain(
         strikePrice: strike,
         type: "CE",
         premium: ce.close_price,
-        ltp: ce.ltp,
+        ltp: (ce.ltp > 0 ? ce.ltp : ce.close_price) || 0,
         bidPrice: ce.bid_price,
         askPrice: ce.ask_price,
         lotSize,
@@ -410,7 +375,7 @@ export async function getOptionsChain(
         strikePrice: strike,
         type: "PE",
         premium: pe.close_price,
-        ltp: pe.ltp,
+        ltp: (pe.ltp > 0 ? pe.ltp : pe.close_price) || 0,
         bidPrice: pe.bid_price,
         askPrice: pe.ask_price,
         lotSize,
@@ -433,7 +398,7 @@ export async function getOptionsChain(
     else if (opt.type === "PE") totalPutOi += opt.oi;
   }
 
-  const strikeInterval = symbol === "SENSEX" ? 500 : symbol === "BANKNIFTY" ? 200 : 100;
+  const strikeInterval = symbol === "NIFTY" || symbol === "FINNIFTY" ? 50 : 100;
   const atmStrike = Math.round(underlyingPrice / strikeInterval) * strikeInterval;
 
   let minLoss = Infinity;

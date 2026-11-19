@@ -117,7 +117,7 @@ export default function Trade() {
   const placeOrderMutation = usePlaceOrder();
 
   const selectedIndex = indices?.find((i) => i.symbol === symbol);
-  const strikeInterval = symbol === "SENSEX" ? 500 : symbol === "BANKNIFTY" ? 200 : 100;
+  const strikeInterval = symbol === "NIFTY" || symbol === "FINNIFTY" ? 50 : 100;
   const atmStrike = chain ? Math.round(chain.underlyingPrice / strikeInterval) * strikeInterval : 0;
 
   const selectedOption = chain?.options.find(

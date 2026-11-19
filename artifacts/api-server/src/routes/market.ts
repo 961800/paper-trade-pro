@@ -8,8 +8,8 @@ router.get("/status", (_req, res): void => {
   res.json(getMarketStatus());
 });
 
-router.get("/upstox-status", (_req, res): void => {
-  res.json(getUpstoxConnectionStatus());
+router.get("/upstox-status", async (_req, res): Promise<void> => {
+  res.json(await getUpstoxConnectionStatus());
 });
 
 router.post("/upstox-token", async (req, res): Promise<void> => {

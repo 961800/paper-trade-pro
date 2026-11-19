@@ -21,13 +21,13 @@ export function Ticker() {
         {[...indices, ...indices].map((index, i) => (
           <div key={`${index.symbol}-${i}`} className="flex items-center gap-2 text-sm">
             <span className="font-semibold">{index.name}</span>
-            <span className="font-mono">{index.ltp.toLocaleString('en-IN')}</span>
+            <span className="font-mono">{index.ltp.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
             <span className={cn(
-              "flex items-center text-xs font-mono",
-              index.change >= 0 ? "text-green-500" : "text-red-500"
+              "flex items-center text-xs font-mono font-medium",
+              index.change >= 0 ? "text-emerald-400" : "text-rose-400"
             )}>
-              {index.change >= 0 ? <ArrowUpIcon className="w-3 h-3" /> : <ArrowDownIcon className="w-3 h-3" />}
-              {Math.abs(index.change).toLocaleString('en-IN')} ({index.changePercent.toFixed(2)}%)
+              {index.change >= 0 ? <ArrowUpIcon className="w-3 h-3 mr-0.5" /> : <ArrowDownIcon className="w-3 h-3 mr-0.5" />}
+              {index.change >= 0 ? "+" : ""}{index.change.toFixed(2)} ({index.change >= 0 ? "+" : ""}{index.changePercent.toFixed(2)}%)
             </span>
           </div>
         ))}
