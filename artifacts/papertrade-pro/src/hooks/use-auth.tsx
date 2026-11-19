@@ -43,15 +43,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("papertrade_token") : null;
+
+    // Immediately wipe tokens and react-query cached user
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("papertrade_token");
+      sessionStorage.clear();
+    }
+    queryClient.setQueryData(getGetMeQueryKey(), null);
+    queryClient.removeQueries({ queryKey: getGetMeQueryKey() });
     queryClient.clear();
-    localStorage.removeItem("papertrade_token");
+
     try {
       const baseUrl = import.meta.env.VITE_API_URL || "";
-      await fetch(`${baseUrl}/api/auth/logout`, { method: "POST", credentials: "include" });
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      await fetch(`${baseUrl}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+      });
     } catch (err) {
       console.error("Logout failed:", err);
     }
-    window.location.href = "/login";
+
+    // Force hard redirect to login so all cached states are reset
+    window.location.replace("/login");
   }, [queryClient]);
 
   const refreshUser = useCallback(() => {

@@ -4,7 +4,7 @@ import { usersTable, positionsTable } from "@workspace/db";
 import { eq, or, and, ilike } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
-import { createSession, setSessionCookie } from "../lib/auth";
+import { createSession, setSessionCookie, clearSession, getSessionId } from "../lib/auth";
 import { sendEmailOtp } from "../lib/mailer";
 
 const router = Router();
@@ -221,9 +221,14 @@ router.post("/login", async (req, res): Promise<void> => {
 });
 
 // POST /auth/logout
-router.post("/logout", (_req, res): void => {
+router.post("/logout", async (req, res): Promise<void> => {
+  const sid = getSessionId(req);
+  if (sid) {
+    await clearSession(res, sid);
+  }
+  res.clearCookie("sid", { path: "/", secure: true, sameSite: "none" });
   res.clearCookie("sid", { path: "/" });
-  res.json({ success: true });
+  res.json({ success: true, message: "Logged out successfully" });
 });
 
 // PATCH /auth/profile

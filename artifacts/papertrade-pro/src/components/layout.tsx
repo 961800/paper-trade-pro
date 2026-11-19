@@ -18,7 +18,8 @@ import {
   LogOut,
   Menu,
   BrainCircuit,
-  Sparkles
+  Sparkles,
+  Users
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
@@ -39,6 +40,7 @@ const NAV_ITEMS = [
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
+  { href: "/admin/users", label: "Admin Users", icon: Users },
 ];
 
 export function Layout({ children }: LayoutProps) {
