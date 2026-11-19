@@ -8,6 +8,7 @@ import {
   getGetOptionsChainQueryKey,
   getGetExpiriesQueryKey,
   getGetIndicesQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,13 @@ export default function Market() {
   const [selectedExpiry, setSelectedExpiry] = useState("");
   const [showChart, setShowChart] = useState(false);
   const [viewMode, setViewMode] = useState<"prices" | "greeks">("prices");
+  const [upstoxStatus, setUpstoxStatus] = useState<any>(null);
+
+  useEffect(() => {
+    customFetch<any>("/api/market/upstox-status")
+      .then((data) => setUpstoxStatus(data))
+      .catch(() => {});
+  }, []);
 
   const { data: indices, isLoading: indicesLoading, refetch: refetchIndices } = useGetIndices({
     query: { queryKey: getGetIndicesQueryKey(), refetchInterval: 10000 },
@@ -100,6 +108,21 @@ export default function Market() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {upstoxStatus && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs gap-1.5 px-2.5 py-1 font-medium",
+                  upstoxStatus.connected
+                    ? "bg-green-500/10 text-green-400 border-green-500/30"
+                    : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                )}
+                title={upstoxStatus.hint}
+              >
+                <span className={cn("w-1.5 h-1.5 rounded-full", upstoxStatus.connected ? "bg-green-400 animate-pulse" : "bg-amber-400")} />
+                {upstoxStatus.connected ? "Upstox Live Feed" : "Simulated Feed"}
+              </Badge>
+            )}
             <Button
               variant={showChart ? "default" : "outline"}
               size="sm"

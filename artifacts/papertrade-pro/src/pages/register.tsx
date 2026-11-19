@@ -120,7 +120,17 @@ export default function Register() {
   const onSubmit = async (data: RegisterFormValues) => {
     setFormError(null);
     try {
-      const res = await registerMutation.mutateAsync({ data });
+      const cleanData = {
+        ...data,
+        email: data.email.trim().toLowerCase(),
+        password: data.password.trim(),
+        fullName: data.fullName.trim(),
+        phone: data.phone.trim(),
+      };
+      const res = await registerMutation.mutateAsync({ data: cleanData });
+      if (res.token) {
+        localStorage.setItem("papertrade_token", res.token);
+      }
       refreshUser();
       toast({
         title: "Account created!",

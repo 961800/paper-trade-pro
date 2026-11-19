@@ -1,11 +1,15 @@
 import { Router } from "express";
-import { getAllIndices, getOptionsChain, getExpiries, getMarketStatus } from "../lib/upstox-client";
+import { getAllIndices, getOptionsChain, getExpiries, getMarketStatus, getUpstoxConnectionStatus } from "../lib/upstox-client";
 
 const router = Router();
 const VALID_SYMBOLS = ["NIFTY", "BANKNIFTY", "SENSEX", "FINNIFTY"];
 
 router.get("/status", (_req, res): void => {
   res.json(getMarketStatus());
+});
+
+router.get("/upstox-status", (_req, res): void => {
+  res.json(getUpstoxConnectionStatus());
 });
 
 router.get("/indices", async (_req, res): Promise<void> => {

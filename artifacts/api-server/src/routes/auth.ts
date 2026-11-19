@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, positionsTable } from "@workspace/db";
-import { eq, or, and } from "drizzle-orm";
+import { eq, or, and, ilike } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 import { createSession, setSessionCookie } from "../lib/auth";
@@ -96,28 +96,40 @@ router.post("/register", async (req, res): Promise<void> => {
   if (!parse.success) { res.status(400).json({ error: parse.error.errors[0]?.message ?? "Invalid input" }); return; }
   const { fullName, email, password, phone, age, city, otp, initialCapital } = parse.data;
 
-  const entry = otpStore.get(phone);
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.trim();
+  const cleanPhone = phone.trim();
+
+  const entry = otpStore.get(cleanPhone);
   if (!entry) { res.status(400).json({ error: "OTP not requested." }); return; }
   if (entry.lockedUntil && Date.now() < entry.lockedUntil) { res.status(429).json({ error: "OTP locked." }); return; }
-  if (Date.now() > entry.expiresAt) { otpStore.delete(phone); res.status(400).json({ error: "OTP expired." }); return; }
+  if (Date.now() > entry.expiresAt) { otpStore.delete(cleanPhone); res.status(400).json({ error: "OTP expired." }); return; }
   entry.attempts++;
   if (entry.otp !== otp) {
     if (entry.attempts >= 3) { entry.lockedUntil = Date.now() + 5 * 60 * 1000; res.status(400).json({ error: "Invalid OTP. Locked for 5 minutes." }); }
     else { res.status(400).json({ error: `Invalid OTP. ${3 - entry.attempts} attempt(s) remaining.` }); }
     return;
   }
-  otpStore.delete(phone);
+  otpStore.delete(cleanPhone);
 
-  const dup = await db.select().from(usersTable).where(or(eq(usersTable.email, email), eq(usersTable.phone, phone))).limit(1);
+  const dup = await db.select().from(usersTable)
+    .where(or(ilike(usersTable.email, cleanEmail), eq(usersTable.phone, cleanPhone)))
+    .limit(1);
   if (dup.length > 0) {
-    res.status(409).json({ error: dup[0].email === email ? "Email already registered." : "Phone already registered." });
+    res.status(409).json({ error: dup[0].email.toLowerCase() === cleanEmail ? "Email already registered." : "Phone already registered." });
     return;
   }
 
   const capital = Math.round(initialCapital ?? 100000).toString();
   const [user] = await db.insert(usersTable).values({
-    fullName, email, passwordHash: hashPassword(password), phone, age, city,
-    balance: capital, initialCapital: capital,
+    fullName: fullName.trim(),
+    email: cleanEmail,
+    passwordHash: hashPassword(cleanPassword),
+    phone: cleanPhone,
+    age,
+    city: city.trim(),
+    balance: capital,
+    initialCapital: capital,
   }).returning();
 
   const sid = await createSession({ userId: user.id });
@@ -130,8 +142,15 @@ router.post("/login", async (req, res): Promise<void> => {
   const parse = z.object({ email: z.string().email(), password: z.string() }).safeParse(req.body);
   if (!parse.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const { email, password } = parse.data;
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
-  if (!user || user.passwordHash !== hashPassword(password)) {
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.trim();
+
+  const [user] = await db.select().from(usersTable)
+    .where(or(eq(usersTable.email, cleanEmail), ilike(usersTable.email, cleanEmail)))
+    .limit(1);
+
+  if (!user || (user.passwordHash !== hashPassword(cleanPassword) && user.passwordHash !== hashPassword(password))) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }

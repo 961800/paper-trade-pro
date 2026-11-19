@@ -12,11 +12,20 @@ import {
   getCurrentOptionPrice as simGetCurrentOptionPrice,
 } from "./market-simulator";
 import type { IndexData, OptionContract, OptionsChainResult } from "./market-simulator";
+import { logger } from "./logger";
 
 const BASE = "https://api.upstox.com/v2";
 
+const lastUpstoxStatus = {
+  configured: false,
+  connected: false,
+  lastError: null as string | null,
+};
+
 function token(): string {
-  return process.env.UPSTOX_API_KEY ?? "";
+  const tok = process.env.UPSTOX_ACCESS_TOKEN || process.env.UPSTOX_API_KEY || process.env.UPSTOX_TOKEN || "";
+  lastUpstoxStatus.configured = Boolean(tok);
+  return tok.trim();
 }
 
 function headers() {
@@ -27,15 +36,60 @@ function headers() {
 }
 
 async function upstoxFetch<T>(path: string): Promise<T | null> {
-  if (!token()) return null;
-  try {
-    const res = await fetch(`${BASE}${path}`, { headers: headers() });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { status: string; data: T };
-    return json.status === "success" ? json.data : null;
-  } catch {
+  const tok = token();
+  if (!tok) {
+    lastUpstoxStatus.connected = false;
+    lastUpstoxStatus.lastError = "No UPSTOX_ACCESS_TOKEN configured in environment.";
     return null;
   }
+  try {
+    const res = await fetch(`${BASE}${path}`, { headers: headers() });
+    if (!res.ok) {
+      const errText = await res.text();
+      lastUpstoxStatus.connected = false;
+      if (res.status === 401) {
+        lastUpstoxStatus.lastError = "401 Unauthorized: Upstox rejected token. Upstox API requires an active OAuth Access Token (JWT starting with eyJ...), not an API Key.";
+        logger.warn({ status: res.status, path, body: errText.slice(0, 300) }, "[Upstox] 401 Unauthorized: Access Token invalid or expired.");
+      } else {
+        lastUpstoxStatus.lastError = `HTTP ${res.status}: ${errText.slice(0, 150)}`;
+        logger.warn({ status: res.status, path, body: errText.slice(0, 300) }, "[Upstox API Error]");
+      }
+      return null;
+    }
+    const json = (await res.json()) as { status: string; data: T };
+    if (json.status === "success") {
+      lastUpstoxStatus.connected = true;
+      lastUpstoxStatus.lastError = null;
+      return json.data;
+    } else {
+      lastUpstoxStatus.connected = false;
+      return null;
+    }
+  } catch (err: any) {
+    lastUpstoxStatus.connected = false;
+    lastUpstoxStatus.lastError = `Network error: ${err.message}`;
+    logger.warn({ err: err.message, path }, "[Upstox Network Error]");
+    return null;
+  }
+}
+
+export function getUpstoxConnectionStatus() {
+  const tok = token();
+  const isJwt = tok.startsWith("eyJ");
+  return {
+    configured: Boolean(tok),
+    tokenType: isJwt ? "access_token" : (tok.length > 0 ? "api_key_or_invalid" : "none"),
+    connected: lastUpstoxStatus.connected,
+    mode: lastUpstoxStatus.connected ? "live_upstox" : "simulated_black_scholes",
+    lastError: lastUpstoxStatus.lastError,
+    hint: !tok
+      ? "Set UPSTOX_ACCESS_TOKEN in your Render environment variables to enable live data."
+      : !isJwt
+      ? "Warning: Your token is an API Key, not an Access Token. Upstox API v2 requires an active OAuth Access Token (starts with eyJ...). Generate it in your Upstox Developer Console."
+      : lastUpstoxStatus.connected
+      ? "Connected to live Upstox v2 Market Feeds."
+      : "Access token may be expired (Upstox tokens expire daily at 3:30 AM IST). Generate a fresh token in Upstox Developer Console.",
+  };
 }
 
 // ── Instrument key mapping ──────────────────────────────────────────────────

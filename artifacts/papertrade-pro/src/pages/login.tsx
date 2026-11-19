@@ -48,7 +48,11 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     setLoginError(null);
     try {
-      const res = await loginMutation.mutateAsync({ data });
+      const cleanData = { email: data.email.trim().toLowerCase(), password: data.password.trim() };
+      const res = await loginMutation.mutateAsync({ data: cleanData });
+      if (res.token) {
+        localStorage.setItem("papertrade_token", res.token);
+      }
       refreshUser();
       toast({ title: "Welcome back!", description: `Logged in as ${res.user.fullName}` });
       setLocation("/dashboard");

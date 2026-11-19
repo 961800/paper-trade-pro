@@ -32,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     queryClient.clear();
+    localStorage.removeItem("papertrade_token");
     try {
       const baseUrl = import.meta.env.VITE_API_URL || "";
       await fetch(`${baseUrl}/api/auth/logout`, { method: "POST", credentials: "include" });
