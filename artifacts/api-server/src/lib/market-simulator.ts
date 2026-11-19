@@ -325,11 +325,17 @@ export interface OptionContract {
   type: "CE" | "PE";
   premium: number;
   ltp: number;
+  change?: number;
+  changePercent?: number;
   bidPrice: number;
   askPrice: number;
   lotSize: number;
   expiry: string;
   oi: number;
+  oiLots?: number;
+  prevOi?: number;
+  oiChange?: number;
+  oiChangePercent?: number;
   volume: number;
   iv: number | null;
   delta: number | null;

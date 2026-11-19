@@ -314,6 +314,7 @@ export async function getOptionsChain(
       close_price: number;
       bid_price: number;
       ask_price: number;
+      prev_oi?: number;
     };
     option_greeks: {
       delta: number;
@@ -349,16 +350,30 @@ export async function getOptionsChain(
     const ce = row.call_options?.market_data;
     const ceG = row.call_options?.option_greeks;
     if (ce) {
+      const ceLtp = (ce.ltp > 0 ? ce.ltp : ce.close_price) || 0;
+      const ceClose = ce.close_price || ceLtp;
+      const ceChange = Math.round((ceLtp - ceClose) * 100) / 100;
+      const ceChangePercent = ceClose > 0 ? Math.round((ceChange / ceClose) * 10000) / 100 : 0;
+      const cePrevOi = ce.prev_oi ?? ce.oi;
+      const ceOiChange = ce.oi - cePrevOi;
+      const ceOiChangePercent = cePrevOi > 0 ? Math.round((ceOiChange / cePrevOi) * 10000) / 100 : 0;
+
       options.push({
         strikePrice: strike,
         type: "CE",
         premium: ce.close_price,
-        ltp: (ce.ltp > 0 ? ce.ltp : ce.close_price) || 0,
+        ltp: ceLtp,
+        change: ceChange,
+        changePercent: ceChangePercent,
         bidPrice: ce.bid_price,
         askPrice: ce.ask_price,
         lotSize,
         expiry: selectedExpiry,
         oi: ce.oi,
+        oiLots: Math.round(ce.oi / lotSize),
+        prevOi: cePrevOi,
+        oiChange: ceOiChange,
+        oiChangePercent: ceOiChangePercent,
         volume: ce.volume,
         iv: ceG?.iv ?? null,
         delta: ceG?.delta ?? null,
@@ -371,16 +386,30 @@ export async function getOptionsChain(
     const pe = row.put_options?.market_data;
     const peG = row.put_options?.option_greeks;
     if (pe) {
+      const peLtp = (pe.ltp > 0 ? pe.ltp : pe.close_price) || 0;
+      const peClose = pe.close_price || peLtp;
+      const peChange = Math.round((peLtp - peClose) * 100) / 100;
+      const peChangePercent = peClose > 0 ? Math.round((peChange / peClose) * 10000) / 100 : 0;
+      const pePrevOi = pe.prev_oi ?? pe.oi;
+      const peOiChange = pe.oi - pePrevOi;
+      const peOiChangePercent = pePrevOi > 0 ? Math.round((peOiChange / pePrevOi) * 10000) / 100 : 0;
+
       options.push({
         strikePrice: strike,
         type: "PE",
         premium: pe.close_price,
-        ltp: (pe.ltp > 0 ? pe.ltp : pe.close_price) || 0,
+        ltp: peLtp,
+        change: peChange,
+        changePercent: peChangePercent,
         bidPrice: pe.bid_price,
         askPrice: pe.ask_price,
         lotSize,
         expiry: selectedExpiry,
         oi: pe.oi,
+        oiLots: Math.round(pe.oi / lotSize),
+        prevOi: pePrevOi,
+        oiChange: peOiChange,
+        oiChangePercent: peOiChangePercent,
         volume: pe.volume,
         iv: peG?.iv ?? null,
         delta: peG?.delta ?? null,

@@ -33,6 +33,7 @@ export default function Market() {
   const [upstoxStatus, setUpstoxStatus] = useState<any>(null);
 
   const [strikeFilter, setStrikeFilter] = useState<"atm5" | "atm10" | "all">("atm5");
+  const [oiMode, setOiMode] = useState<"lots" | "qty">("lots");
 
   useEffect(() => {
     customFetch<any>("/api/market/upstox-status")
@@ -366,11 +367,32 @@ export default function Market() {
             <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
               <Button
                 size="sm"
+                variant={oiMode === "lots" ? "secondary" : "ghost"}
+                className="h-6 text-xs px-2"
+                onClick={() => setOiMode("lots")}
+                title="Display open interest in standard lot contracts"
+              >
+                OI (Lots)
+              </Button>
+              <Button
+                size="sm"
+                variant={oiMode === "qty" ? "secondary" : "ghost"}
+                className="h-6 text-xs px-2"
+                onClick={() => setOiMode("qty")}
+                title="Display open interest in raw quantity/shares"
+              >
+                OI (Qty)
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
+              <Button
+                size="sm"
                 variant={viewMode === "prices" ? "secondary" : "ghost"}
                 className="h-6 text-xs px-2.5"
                 onClick={() => setViewMode("prices")}
               >
-                Prices & Volume
+                Prices &amp; Volume
               </Button>
               <Button
                 size="sm"
@@ -391,13 +413,13 @@ export default function Market() {
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <span>{selectedSymbol} Options Chain</span>
                 {chain && (
-                  <span className="text-muted-foreground font-normal text-xs">
+                  <span className="text-muted-foreground font-normal text-xs font-mono">
                     Spot: ₹{chain.underlyingPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                   </span>
                 )}
               </CardTitle>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">{selectedExpiry || "Select expiry"}</Badge>
+                <Badge variant="outline" className="text-xs font-mono">{selectedExpiry || "Select expiry"}</Badge>
               </div>
             </div>
           </CardHeader>
@@ -414,25 +436,25 @@ export default function Market() {
                 <table className="w-full text-xs">
                   <thead>
                     {viewMode === "prices" ? (
-                      <tr className="border-b border-border bg-muted/40 text-muted-foreground">
-                        <th className="text-left px-3 py-2.5">OI</th>
-                        <th className="text-right px-3 py-2.5">Volume</th>
+                      <tr className="border-b border-border bg-muted/40 text-muted-foreground font-medium">
+                        <th className="text-left px-3 py-2.5">Call OI ({oiMode === "lots" ? "Lots" : "Qty"})</th>
+                        <th className="text-right px-3 py-2.5">Call Volume</th>
                         <th className="text-right px-3 py-2.5">IV%</th>
-                        <th className="text-right px-3 py-2.5 text-green-500 font-bold">CE LTP ▼</th>
+                        <th className="text-right px-3 py-2.5 text-emerald-400 font-bold">Call LTP ▼</th>
                         <th className="text-center px-4 py-2.5 font-bold text-foreground">STRIKE</th>
-                        <th className="text-left px-3 py-2.5 text-red-400 font-bold">PE LTP ▼</th>
+                        <th className="text-left px-3 py-2.5 text-rose-400 font-bold">Put LTP ▼</th>
                         <th className="text-left px-3 py-2.5">IV%</th>
-                        <th className="text-left px-3 py-2.5">Volume</th>
-                        <th className="text-left px-3 py-2.5">OI</th>
+                        <th className="text-left px-3 py-2.5">Put Volume</th>
+                        <th className="text-left px-3 py-2.5">Put OI ({oiMode === "lots" ? "Lots" : "Qty"})</th>
                       </tr>
                     ) : (
-                      <tr className="border-b border-border bg-muted/40 text-muted-foreground">
-                        <th className="text-left px-3 py-2.5 text-green-400">Delta (Δ)</th>
+                      <tr className="border-b border-border bg-muted/40 text-muted-foreground font-medium">
+                        <th className="text-left px-3 py-2.5 text-emerald-400">Call Delta (Δ)</th>
                         <th className="text-right px-3 py-2.5">Gamma (Γ)</th>
                         <th className="text-right px-3 py-2.5 text-amber-400">Theta (Θ/d)</th>
                         <th className="text-right px-3 py-2.5 text-cyan-400">Vega (ν)</th>
                         <th className="text-center px-4 py-2.5 font-bold text-foreground">STRIKE</th>
-                        <th className="text-left px-3 py-2.5 text-red-400">Delta (Δ)</th>
+                        <th className="text-left px-3 py-2.5 text-rose-400">Put Delta (Δ)</th>
                         <th className="text-left px-3 py-2.5">Gamma (Γ)</th>
                         <th className="text-left px-3 py-2.5 text-amber-400">Theta (Θ/d)</th>
                         <th className="text-left px-3 py-2.5 text-cyan-400">Vega (ν)</th>
@@ -440,89 +462,267 @@ export default function Market() {
                     )}
                   </thead>
                   <tbody>
-                    {strikes.map((strike) => {
-                      const ce = chain.options.find((o: any) => o.strikePrice === strike && o.type === "CE");
-                      const pe = chain.options.find((o: any) => o.strikePrice === strike && o.type === "PE");
-                      const isAtm = strike === atmStrike;
+                    {(() => {
+                      let spotBarRendered = false;
+                      const spotQuote = indices?.find((i) => i.symbol === selectedSymbol);
+                      const isSpotUp = (spotQuote?.change ?? 0) >= 0;
+                      const maxOi = Math.max(...chain.options.map((o: any) => o.oi ?? 0), 1);
 
-                      if (viewMode === "prices") {
-                        return (
-                          <tr
-                            key={strike}
-                            className={cn(
-                              "border-b border-border/40 hover:bg-muted/20 transition-colors",
-                              isAtm && "bg-primary/15 border-y-2 border-primary/60 font-semibold"
-                            )}
-                          >
-                            <td className="px-3 py-2 text-muted-foreground font-mono">{ce?.oi?.toLocaleString("en-IN") ?? "-"}</td>
-                            <td className="px-3 py-2 text-right text-muted-foreground font-mono">{ce?.volume?.toLocaleString("en-IN") ?? "-"}</td>
-                            <td className="px-3 py-2 text-right text-muted-foreground">{ce?.iv?.toFixed(1) ?? "-"}</td>
-                            <td className="px-3 py-2 text-right">
-                              <button
-                                onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=CE&expiry=${selectedExpiry}`)}
-                                className="font-mono font-bold text-green-500 hover:underline hover:text-green-400 transition-colors"
-                                title="Trade CE"
-                              >
-                                {ce?.ltp?.toFixed(2) ?? "-"}
-                              </button>
-                            </td>
-                            <td className={cn("px-4 py-2 text-center font-bold font-mono", isAtm ? "text-primary" : "text-foreground")}>
-                              <div
-                                className={cn(
-                                  "px-2 py-0.5 rounded inline-flex items-center gap-1 font-bold font-mono",
-                                  isAtm && "bg-primary/20 ring-1 ring-primary/40"
-                                )}
-                              >
-                                {isAtm && (
-                                  <span className="text-[9px] bg-primary text-primary-foreground font-bold px-1.5 py-0.5 rounded mr-0.5 animate-pulse">
-                                    ATM
+                      return strikes.map((strike, sIdx) => {
+                        const ce = chain.options.find((o: any) => o.strikePrice === strike && o.type === "CE");
+                        const pe = chain.options.find((o: any) => o.strikePrice === strike && o.type === "PE");
+                        const isAtm = strike === atmStrike;
+                        const isCallItm = strike < chain.underlyingPrice;
+                        const isPutItm = strike > chain.underlyingPrice;
+
+                        const elements: React.ReactNode[] = [];
+
+                        // Render Spot Divider Row directly above the first strike that is >= underlying spot price
+                        if (!spotBarRendered && strike >= chain.underlyingPrice) {
+                          spotBarRendered = true;
+                          elements.push(
+                            <tr key="spot-bar-divider" className="bg-slate-950/90 border-y-2 border-primary/50 text-foreground font-mono font-bold">
+                              <td colSpan={9} className="py-2 px-4 text-center">
+                                <div className="inline-flex items-center gap-3 bg-card border border-primary/40 rounded-full px-5 py-1 text-xs shadow-md">
+                                  <span className="text-primary font-bold">{selectedSymbol} Spot</span>
+                                  <span className="text-foreground text-sm font-extrabold font-mono">
+                                    ₹{chain.underlyingPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                                   </span>
-                                )}
-                                <span>{strike.toLocaleString("en-IN")}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <button
-                                onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=PE&expiry=${selectedExpiry}`)}
-                                className="font-mono font-bold text-red-400 hover:underline hover:text-red-300 transition-colors"
-                                title="Trade PE"
-                              >
-                                {pe?.ltp?.toFixed(2) ?? "-"}
-                              </button>
-                            </td>
-                            <td className="px-3 py-2 text-muted-foreground">{pe?.iv?.toFixed(1) ?? "-"}</td>
-                            <td className="px-3 py-2 text-muted-foreground font-mono">{pe?.volume?.toLocaleString("en-IN") ?? "-"}</td>
-                            <td className="px-3 py-2 text-muted-foreground font-mono">{pe?.oi?.toLocaleString("en-IN") ?? "-"}</td>
-                          </tr>
-                        );
-                      } else {
-                        // Greeks view
-                        return (
-                          <tr
-                            key={strike}
-                            className={cn(
-                              "border-b border-border/40 hover:bg-muted/20 transition-colors",
-                              isAtm && "bg-primary/15 border-y-2 border-primary/60 font-semibold"
-                            )}
-                          >
-                            <td className="px-3 py-2 font-mono font-semibold text-green-400">{ce?.delta != null ? ce.delta.toFixed(3) : "-"}</td>
-                            <td className="px-3 py-2 text-right font-mono text-muted-foreground">{ce?.gamma != null ? ce.gamma.toFixed(4) : "-"}</td>
-                            <td className="px-3 py-2 text-right font-mono text-amber-400">{ce?.theta != null ? `₹${ce.theta.toFixed(1)}` : "-"}</td>
-                            <td className="px-3 py-2 text-right font-mono text-cyan-400">{ce?.vega != null ? ce.vega.toFixed(1) : "-"}</td>
-                            <td className={cn("px-4 py-2 text-center font-bold font-mono", isAtm ? "text-primary" : "text-foreground")}>
-                              <div className="px-2 py-0.5 rounded inline-flex items-center gap-1 font-bold font-mono">
-                                {isAtm && <span className="text-[9px] text-primary mr-0.5 font-normal border border-primary/40 px-1 rounded">ATM</span>}
-                                <span>{strike.toLocaleString("en-IN")}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2 font-mono font-semibold text-red-400">{pe?.delta != null ? pe.delta.toFixed(3) : "-"}</td>
-                            <td className="px-3 py-2 font-mono text-muted-foreground">{pe?.gamma != null ? pe.gamma.toFixed(4) : "-"}</td>
-                            <td className="px-3 py-2 font-mono text-amber-400">{pe?.theta != null ? `₹${pe.theta.toFixed(1)}` : "-"}</td>
-                            <td className="px-3 py-2 font-mono text-cyan-400">{pe?.vega != null ? pe.vega.toFixed(1) : "-"}</td>
-                          </tr>
-                        );
-                      }
-                    })}
+                                  <span className="text-muted-foreground">|</span>
+                                  <span className={cn("font-bold font-mono text-xs", isSpotUp ? "text-emerald-400" : "text-rose-400")}>
+                                    {isSpotUp ? "+" : ""}{spotQuote?.change?.toFixed(2) ?? "0.00"} ({isSpotUp ? "+" : ""}{spotQuote?.changePercent?.toFixed(2) ?? "0.00"}%)
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        if (viewMode === "prices") {
+                          elements.push(
+                            <tr
+                              key={strike}
+                              className={cn(
+                                "border-b border-border/40 hover:bg-muted/20 transition-colors group",
+                                isAtm && "bg-primary/10 border-y border-primary/40"
+                              )}
+                            >
+                              {/* Call OI */}
+                              <td className={cn("px-3 py-2 text-left font-mono", isCallItm && "bg-emerald-500/[0.04]")}>
+                                <div className="leading-tight">
+                                  <span className="text-foreground font-medium">
+                                    {oiMode === "lots"
+                                      ? (ce?.oiLots ?? Math.round((ce?.oi ?? 0) / (ce?.lotSize ?? 65))).toLocaleString("en-IN")
+                                      : (ce?.oi?.toLocaleString("en-IN") ?? "-")}
+                                  </span>
+                                  {ce?.oiChangePercent != null && ce.oiChangePercent !== 0 && (
+                                    <span className={cn("block text-[10px] font-mono", ce.oiChangePercent >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                                      {ce.oiChangePercent >= 0 ? "+" : ""}{ce.oiChangePercent.toFixed(1)}%
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Call Volume */}
+                              <td className={cn("px-3 py-2 text-right text-muted-foreground font-mono", isCallItm && "bg-emerald-500/[0.04]")}>
+                                {ce?.volume?.toLocaleString("en-IN") ?? "-"}
+                              </td>
+
+                              {/* Call IV% */}
+                              <td className={cn("px-3 py-2 text-right text-muted-foreground", isCallItm && "bg-emerald-500/[0.04]")}>
+                                {ce?.iv?.toFixed(1) ?? "-"}
+                              </td>
+
+                              {/* Call LTP with Quick Trade B/S Buttons & % Change */}
+                              <td className={cn("px-3 py-2 text-right", isCallItm && "bg-emerald-500/[0.04]")}>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <div className="hidden group-hover:flex items-center gap-0.5">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=CE&expiry=${selectedExpiry}&action=buy`);
+                                      }}
+                                      className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold shadow-sm"
+                                      title="Buy CE"
+                                    >
+                                      B
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=CE&expiry=${selectedExpiry}&action=sell`);
+                                      }}
+                                      className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold shadow-sm"
+                                      title="Sell CE"
+                                    >
+                                      S
+                                    </button>
+                                  </div>
+                                  <div className="text-right leading-tight">
+                                    <button
+                                      onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=CE&expiry=${selectedExpiry}`)}
+                                      className="font-mono font-bold text-emerald-400 hover:underline hover:text-emerald-300 transition-colors"
+                                      title="Trade CE"
+                                    >
+                                      ₹{ce?.ltp?.toFixed(2) ?? "-"}
+                                    </button>
+                                    {ce?.changePercent != null && ce.changePercent !== 0 && (
+                                      <span className={cn("block text-[10px] font-mono", ce.changePercent >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                                        {ce.changePercent >= 0 ? "+" : ""}{ce.changePercent.toFixed(1)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Center Strike with Visual OI Dual Bar */}
+                              <td className={cn("px-4 py-2 text-center font-bold font-mono bg-card", isAtm ? "text-primary" : "text-foreground")}>
+                                <div
+                                  className={cn(
+                                    "px-2 py-0.5 rounded inline-flex flex-col items-center justify-center font-bold font-mono",
+                                    isAtm && "bg-primary/20 ring-1 ring-primary/40"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-1">
+                                    {isAtm && (
+                                      <span className="text-[9px] bg-primary text-primary-foreground font-bold px-1 py-0.2 rounded animate-pulse">
+                                        ATM
+                                      </span>
+                                    )}
+                                    <span>{strike.toLocaleString("en-IN")}</span>
+                                  </div>
+                                  {/* Visual OI distribution bar */}
+                                  <div className="flex items-center justify-center gap-0.5 mt-1 w-16 h-1 bg-muted/60 rounded-full overflow-hidden">
+                                    <div
+                                      className="bg-emerald-500 h-full"
+                                      style={{ width: `${Math.min(50, ((ce?.oi ?? 0) / maxOi) * 50)}%` }}
+                                      title={`Call OI: ${(ce?.oi ?? 0).toLocaleString("en-IN")}`}
+                                    />
+                                    <div
+                                      className="bg-rose-500 h-full"
+                                      style={{ width: `${Math.min(50, ((pe?.oi ?? 0) / maxOi) * 50)}%` }}
+                                      title={`Put OI: ${(pe?.oi ?? 0).toLocaleString("en-IN")}`}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Put LTP with Quick Trade B/S Buttons & % Change */}
+                              <td className={cn("px-3 py-2 text-left", isPutItm && "bg-rose-500/[0.04]")}>
+                                <div className="flex items-center justify-start gap-1.5">
+                                  <div className="text-left leading-tight">
+                                    <button
+                                      onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=PE&expiry=${selectedExpiry}`)}
+                                      className="font-mono font-bold text-rose-400 hover:underline hover:text-rose-300 transition-colors"
+                                      title="Trade PE"
+                                    >
+                                      ₹{pe?.ltp?.toFixed(2) ?? "-"}
+                                    </button>
+                                    {pe?.changePercent != null && pe.changePercent !== 0 && (
+                                      <span className={cn("block text-[10px] font-mono", pe.changePercent >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                                        {pe.changePercent >= 0 ? "+" : ""}{pe.changePercent.toFixed(1)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="hidden group-hover:flex items-center gap-0.5">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=PE&expiry=${selectedExpiry}&action=buy`);
+                                      }}
+                                      className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold shadow-sm"
+                                      title="Buy PE"
+                                    >
+                                      B
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=PE&expiry=${selectedExpiry}&action=sell`);
+                                      }}
+                                      className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold shadow-sm"
+                                      title="Sell PE"
+                                    >
+                                      S
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Put IV% */}
+                              <td className={cn("px-3 py-2 text-muted-foreground", isPutItm && "bg-rose-500/[0.04]")}>
+                                {pe?.iv?.toFixed(1) ?? "-"}
+                              </td>
+
+                              {/* Put Volume */}
+                              <td className={cn("px-3 py-2 text-left text-muted-foreground font-mono", isPutItm && "bg-rose-500/[0.04]")}>
+                                {pe?.volume?.toLocaleString("en-IN") ?? "-"}
+                              </td>
+
+                              {/* Put OI */}
+                              <td className={cn("px-3 py-2 text-left font-mono", isPutItm && "bg-rose-500/[0.04]")}>
+                                <div className="leading-tight">
+                                  <span className="text-foreground font-medium">
+                                    {oiMode === "lots"
+                                      ? (pe?.oiLots ?? Math.round((pe?.oi ?? 0) / (pe?.lotSize ?? 65))).toLocaleString("en-IN")
+                                      : (pe?.oi?.toLocaleString("en-IN") ?? "-")}
+                                  </span>
+                                  {pe?.oiChangePercent != null && pe.oiChangePercent !== 0 && (
+                                    <span className={cn("block text-[10px] font-mono", pe.oiChangePercent >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                                      {pe.oiChangePercent >= 0 ? "+" : ""}{pe.oiChangePercent.toFixed(1)}%
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        } else {
+                          // Greeks view
+                          elements.push(
+                            <tr
+                              key={strike}
+                              className={cn(
+                                "border-b border-border/40 hover:bg-muted/20 transition-colors",
+                                isAtm && "bg-primary/10 border-y border-primary/40 font-semibold"
+                              )}
+                            >
+                              <td className={cn("px-3 py-2 font-mono font-semibold text-emerald-400", isCallItm && "bg-emerald-500/[0.04]")}>
+                                {ce?.delta != null ? ce.delta.toFixed(3) : "-"}
+                              </td>
+                              <td className={cn("px-3 py-2 text-right font-mono text-muted-foreground", isCallItm && "bg-emerald-500/[0.04]")}>
+                                {ce?.gamma != null ? ce.gamma.toFixed(4) : "-"}
+                              </td>
+                              <td className={cn("px-3 py-2 text-right font-mono text-amber-400", isCallItm && "bg-emerald-500/[0.04]")}>
+                                {ce?.theta != null ? `₹${ce.theta.toFixed(1)}` : "-"}
+                              </td>
+                              <td className={cn("px-3 py-2 text-right font-mono text-cyan-400", isCallItm && "bg-emerald-500/[0.04]")}>
+                                {ce?.vega != null ? ce.vega.toFixed(1) : "-"}
+                              </td>
+                              <td className={cn("px-4 py-2 text-center font-bold font-mono bg-card", isAtm ? "text-primary" : "text-foreground")}>
+                                <div className="px-2 py-0.5 rounded inline-flex items-center gap-1 font-bold font-mono">
+                                  {isAtm && <span className="text-[9px] text-primary mr-0.5 font-normal border border-primary/40 px-1 rounded">ATM</span>}
+                                  <span>{strike.toLocaleString("en-IN")}</span>
+                                </div>
+                              </td>
+                              <td className={cn("px-3 py-2 font-mono font-semibold text-rose-400", isPutItm && "bg-rose-500/[0.04]")}>
+                                {pe?.delta != null ? pe.delta.toFixed(3) : "-"}
+                              </td>
+                              <td className={cn("px-3 py-2 font-mono text-muted-foreground", isPutItm && "bg-rose-500/[0.04]")}>
+                                {pe?.gamma != null ? pe.gamma.toFixed(4) : "-"}
+                              </td>
+                              <td className={cn("px-3 py-2 font-mono text-amber-400", isPutItm && "bg-rose-500/[0.04]")}>
+                                {pe?.theta != null ? `₹${pe.theta.toFixed(1)}` : "-"}
+                              </td>
+                              <td className={cn("px-3 py-2 font-mono text-cyan-400", isPutItm && "bg-rose-500/[0.04]")}>
+                                {pe?.vega != null ? pe.vega.toFixed(1) : "-"}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return elements;
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
