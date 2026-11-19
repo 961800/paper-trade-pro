@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, positionsTable } from "@workspace/db";
+import { usersTable, positionsTable, systemSettingsTable } from "@workspace/db";
 import { eq, or, and, ilike } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
@@ -11,6 +11,7 @@ const router = Router();
 
 interface OTPEntry { otp: string; expiresAt: number; attempts: number; lockedUntil?: number }
 const otpStore = new Map<string, OTPEntry>();
+const loginOtpStore = new Map<string, OTPEntry>();
 
 function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password + "papertrade_salt_2024").digest("hex");
@@ -218,6 +219,143 @@ router.post("/login", async (req, res): Promise<void> => {
   const sid = await createSession({ userId: user.id });
   setSessionCookie(res, sid);
   res.json({ user: await serializeUser(user), token: sid });
+});
+
+// POST /auth/login-otp/send — Real-time Gmail OTP for Login
+router.post("/login-otp/send", async (req, res): Promise<void> => {
+  const schema = z.object({ email: z.string().email("Please enter a valid email address.") });
+  const parse = schema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.errors[0]?.message ?? "Invalid email address" });
+    return;
+  }
+
+  const cleanEmail = parse.data.email.trim().toLowerCase();
+
+  // Verify that an account exists for this email
+  const [user] = await db.select().from(usersTable)
+    .where(or(eq(usersTable.email, cleanEmail), ilike(usersTable.email, cleanEmail)))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "No account found with this Gmail address. Please register first." });
+    return;
+  }
+
+  const existing = loginOtpStore.get(cleanEmail);
+  if (existing?.lockedUntil && Date.now() < existing.lockedUntil) {
+    const rem = Math.ceil((existing.lockedUntil - Date.now()) / 60000);
+    res.status(429).json({ error: `Login OTP locked due to previous failed attempts. Try again in ${rem} minute(s).` });
+    return;
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  loginOtpStore.set(cleanEmail, { otp, expiresAt, attempts: 0 });
+
+  const mailResult = await sendEmailOtp(cleanEmail, otp, "login");
+
+  res.json({
+    success: true,
+    message: mailResult.mode === "brevo"
+      ? `Real-time OTP delivered to your Gmail (${cleanEmail}) via Brevo.`
+      : mailResult.mode === "smtp"
+      ? `Verification OTP sent to your Gmail (${cleanEmail}).`
+      : `Login verification code ready for ${cleanEmail}.`,
+    email: cleanEmail,
+    mode: mailResult.mode,
+    otp: mailResult.mode === "fallback" ? otp : undefined,
+  });
+});
+
+// POST /auth/login-otp/verify — Authenticate using Gmail OTP
+router.post("/login-otp/verify", async (req, res): Promise<void> => {
+  const schema = z.object({
+    email: z.string().email(),
+    otp: z.string().length(6, "OTP must be exactly 6 digits."),
+  });
+
+  const parse = schema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.errors[0]?.message ?? "Invalid request" });
+    return;
+  }
+
+  const cleanEmail = parse.data.email.trim().toLowerCase();
+  const { otp } = parse.data;
+
+  const entry = loginOtpStore.get(cleanEmail);
+  if (!entry) {
+    res.status(400).json({ error: "No OTP was requested for this email. Please click Send OTP first." });
+    return;
+  }
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
+    res.status(429).json({ error: "Too many failed OTP attempts. Locked for 5 minutes." });
+    return;
+  }
+  if (Date.now() > entry.expiresAt) {
+    loginOtpStore.delete(cleanEmail);
+    res.status(400).json({ error: "OTP expired. Please request a new code." });
+    return;
+  }
+
+  entry.attempts++;
+  if (entry.otp !== otp) {
+    if (entry.attempts >= 3) {
+      entry.lockedUntil = Date.now() + 5 * 60 * 1000;
+      res.status(400).json({ error: "Incorrect OTP. Maximum attempts exceeded. Locked for 5 minutes." });
+    } else {
+      res.status(400).json({ error: `Incorrect OTP. ${3 - entry.attempts} attempt(s) remaining.` });
+    }
+    return;
+  }
+
+  // Clear OTP on successful match
+  loginOtpStore.delete(cleanEmail);
+
+  const [user] = await db.select().from(usersTable)
+    .where(or(eq(usersTable.email, cleanEmail), ilike(usersTable.email, cleanEmail)))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "User account not found." });
+    return;
+  }
+
+  const sid = await createSession({ userId: user.id });
+  setSessionCookie(res, sid);
+  res.json({ user: await serializeUser(user), token: sid });
+});
+
+// POST /auth/config-brevo — Save Brevo API Key
+router.post("/config-brevo", async (req, res): Promise<void> => {
+  const schema = z.object({
+    apiKey: z.string().min(10, "Brevo API key must be valid"),
+    senderEmail: z.string().email().optional(),
+  });
+  const parse = schema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.errors[0]?.message ?? "Invalid key" });
+    return;
+  }
+
+  const { apiKey, senderEmail } = parse.data;
+
+  await db.insert(systemSettingsTable)
+    .values({ key: "brevo_api_key", value: apiKey.trim(), updatedAt: new Date() })
+    .onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: apiKey.trim(), updatedAt: new Date() } });
+
+  if (senderEmail) {
+    await db.insert(systemSettingsTable)
+      .values({ key: "brevo_sender_email", value: senderEmail.trim().toLowerCase(), updatedAt: new Date() })
+      .onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: senderEmail.trim().toLowerCase(), updatedAt: new Date() } });
+  }
+
+  res.json({
+    success: true,
+    message: "Brevo API key successfully stored and activated for real-time OTP delivery!",
+  });
 });
 
 // POST /auth/logout
