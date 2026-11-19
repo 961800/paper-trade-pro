@@ -2,11 +2,11 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, positionsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
-import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 
-router.get("/users", requireAuth, async (_req, res): Promise<void> => {
+router.get("/users", requireAdmin, async (_req, res): Promise<void> => {
   const users = await db.select().from(usersTable).orderBy(desc(usersTable.createdAt));
 
   const openPositionRows = await db

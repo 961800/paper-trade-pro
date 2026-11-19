@@ -1,18 +1,49 @@
 import React, { useState } from "react";
+import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
+import { useAuth } from "@/hooks/use-auth";
 import { useGetAdminUsers } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PnLBadge } from "@/components/pnl-badge";
-import { Users, Search, TrendingUp, Wallet, Landmark, Briefcase } from "lucide-react";
+import { Users, Search, TrendingUp, Wallet, Landmark, Briefcase, ShieldAlert } from "lucide-react";
 
 function fmt(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
 export default function AdminUsers() {
-  const { data, isLoading } = useGetAdminUsers({ query: { queryKey: ["/api/admin/users"] } });
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const isAdmin = (user as any)?.isAdmin === true;
+
+  const { data, isLoading } = useGetAdminUsers({
+    query: {
+      queryKey: ["/api/admin/users"],
+      enabled: isAdmin,
+    },
+  });
   const [search, setSearch] = useState("");
+
+  if (!isAdmin) {
+    return (
+      <Layout>
+        <div className="py-24 text-center space-y-4 max-w-md mx-auto">
+          <div className="w-16 h-16 rounded-2xl bg-destructive/10 border border-destructive/30 flex items-center justify-center mx-auto text-destructive shadow-sm">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">Access Restricted</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            This dashboard displays sensitive trader account data and is restricted to system administrators only.
+          </p>
+          <Button onClick={() => setLocation("/dashboard")} className="mt-2">
+            Back to Dashboard
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
 
   const users = data?.users ?? [];
   const filtered = users.filter(

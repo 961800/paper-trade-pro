@@ -77,6 +77,7 @@ export interface User {
   targetPrice?: number | null;
   /** @nullable */
   maxDailyLoss?: number | null;
+  isAdmin?: boolean;
   createdAt: string;
 }
 

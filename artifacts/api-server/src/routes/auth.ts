@@ -6,6 +6,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { createSession, setSessionCookie, clearSession, getSessionId } from "../lib/auth";
 import { sendEmailOtp } from "../lib/mailer";
+import { isUserAdmin } from "../middlewares/auth";
 
 const router = Router();
 
@@ -49,6 +50,7 @@ export async function serializeUser(user: typeof usersTable.$inferSelect) {
     maxDailyLoss: user.maxDailyLoss ? parseFloat(user.maxDailyLoss) : null,
     killSwitchActive: user.killSwitchActive ?? false,
     maxDailyTrades: user.maxDailyTrades ?? 20,
+    isAdmin: await isUserAdmin(user.email),
     createdAt: user.createdAt.toISOString(),
   };
 }

@@ -40,7 +40,7 @@ const NAV_ITEMS = [
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
-  { href: "/admin/users", label: "Admin Users", icon: Users },
+  { href: "/admin/users", label: "Admin Users", icon: Users, adminOnly: true },
 ];
 
 export function Layout({ children }: LayoutProps) {
@@ -59,7 +59,7 @@ export function Layout({ children }: LayoutProps) {
       
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="space-y-1 px-2">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item: any) => !item.adminOnly || (user as any)?.isAdmin).map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href;
             return (
