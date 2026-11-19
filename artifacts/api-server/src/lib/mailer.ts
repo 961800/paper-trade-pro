@@ -174,6 +174,12 @@ export async function sendEmailOtp(
       } else {
         const errText = await res.text();
         console.warn(`[AUTH] Brevo API responded with ${res.status}:`, errText);
+        try {
+          const parsed = JSON.parse(errText);
+          if (parsed?.message && (parsed.message.includes("authorised_ips") || parsed.message.includes("unrecognised IP"))) {
+            console.warn("[AUTH] Brevo security blocked request due to IP whitelist. Please turn off IP restriction in your Brevo settings.");
+          }
+        } catch {}
       }
     } catch (err: any) {
       console.error(`[AUTH] Failed to send via Brevo API:`, err?.message || err);
