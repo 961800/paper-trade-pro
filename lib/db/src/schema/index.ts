@@ -6,3 +6,4 @@ export * from "./watchlist";
 export * from "./notifications";
 export * from "./auth";
 export * from "./systemSettings";
+export * from "./mentor";

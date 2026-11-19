@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TradingViewWidget } from "@/components/trading-view-widget";
+import { StrikeChartModal, StrikeChartData } from "@/components/strike-chart-modal";
 import { cn } from "@/lib/utils";
 import { 
   ArrowUpIcon, 
@@ -26,7 +27,8 @@ import {
   Gauge, 
   TrendingUp, 
   TrendingDown, 
-  Info 
+  Info,
+  BarChart2
 } from "lucide-react";
 
 const TV_SYMBOLS: Record<string, string> = {
@@ -43,6 +45,33 @@ export default function Market() {
   const [showChart, setShowChart] = useState(false);
   const [viewMode, setViewMode] = useState<"prices" | "greeks">("prices");
   const [upstoxStatus, setUpstoxStatus] = useState<any>(null);
+  const [chartModalData, setChartModalData] = useState<StrikeChartData | null>(null);
+  const [isChartModalOpen, setIsChartModalOpen] = useState(false);
+
+  const handleOpenStrikeChart = (strikePrice: number, preferredType: "CE" | "PE" = "CE") => {
+    const ce = chain?.options?.find((o: any) => o.strikePrice === strikePrice && o.type === "CE");
+    const pe = chain?.options?.find((o: any) => o.strikePrice === strikePrice && o.type === "PE");
+    const opt = preferredType === "CE" ? ce : pe;
+
+    setChartModalData({
+      symbol: selectedSymbol,
+      strikePrice,
+      optionType: preferredType,
+      expiry: selectedExpiry || "2026-06-26",
+      ltp: opt?.ltp ?? (preferredType === "CE" ? 180 : 140),
+      change: opt?.change,
+      changePercent: opt?.changePercent,
+      iv: opt?.iv,
+      delta: opt?.delta,
+      gamma: opt?.gamma,
+      theta: opt?.theta,
+      vega: opt?.vega,
+      oi: opt?.oi,
+      volume: opt?.volume,
+      underlyingPrice: chain?.underlyingPrice,
+    });
+    setIsChartModalOpen(true);
+  };
 
   useEffect(() => {
     customFetch<any>("/api/market/upstox-status")
@@ -340,24 +369,57 @@ export default function Market() {
                             <td className="px-3 py-2 text-right text-muted-foreground font-mono">{ce?.volume?.toLocaleString("en-IN") ?? "-"}</td>
                             <td className="px-3 py-2 text-right text-muted-foreground">{ce?.iv?.toFixed(1) ?? "-"}</td>
                             <td className="px-3 py-2 text-right">
-                              <button
-                                onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=CE&expiry=${selectedExpiry}`)}
-                                className="font-mono font-bold text-green-500 hover:underline hover:text-green-400 transition-colors"
-                              >
-                                {ce?.ltp?.toFixed(2) ?? "-"}
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenStrikeChart(strike, "CE");
+                                  }}
+                                  className="text-muted-foreground hover:text-green-400 p-1 rounded hover:bg-green-500/10 transition-colors"
+                                  title="Open CE Candlestick Chart"
+                                >
+                                  <BarChart2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=CE&expiry=${selectedExpiry}`)}
+                                  className="font-mono font-bold text-green-500 hover:underline hover:text-green-400 transition-colors"
+                                  title="Trade CE"
+                                >
+                                  {ce?.ltp?.toFixed(2) ?? "-"}
+                                </button>
+                              </div>
                             </td>
                             <td className={cn("px-4 py-2 text-center font-bold font-mono", isAtm ? "text-primary" : "text-foreground")}>
-                              {isAtm && <span className="text-[9px] text-primary mr-1 font-normal border border-primary/40 px-1 rounded">ATM</span>}
-                              {strike.toLocaleString("en-IN")}
+                              <button
+                                onClick={() => handleOpenStrikeChart(strike, "CE")}
+                                className="group hover:text-primary hover:bg-primary/10 px-2 py-0.5 rounded transition-all inline-flex items-center gap-1 font-bold font-mono"
+                                title="Click to open real-time candlestick chart (Groww style)"
+                              >
+                                {isAtm && <span className="text-[9px] text-primary mr-0.5 font-normal border border-primary/40 px-1 rounded">ATM</span>}
+                                <span>{strike.toLocaleString("en-IN")}</span>
+                                <BarChart2 className="w-3 h-3 text-muted-foreground group-hover:text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
+                              </button>
                             </td>
                             <td className="px-3 py-2">
-                              <button
-                                onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=PE&expiry=${selectedExpiry}`)}
-                                className="font-mono font-bold text-red-400 hover:underline hover:text-red-300 transition-colors"
-                              >
-                                {pe?.ltp?.toFixed(2) ?? "-"}
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => setLocation(`/trade?symbol=${selectedSymbol}&strike=${strike}&type=PE&expiry=${selectedExpiry}`)}
+                                  className="font-mono font-bold text-red-400 hover:underline hover:text-red-300 transition-colors"
+                                  title="Trade PE"
+                                >
+                                  {pe?.ltp?.toFixed(2) ?? "-"}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenStrikeChart(strike, "PE");
+                                  }}
+                                  className="text-muted-foreground hover:text-red-400 p-1 rounded hover:bg-red-500/10 transition-colors"
+                                  title="Open PE Candlestick Chart"
+                                >
+                                  <BarChart2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                             <td className="px-3 py-2 text-muted-foreground">{pe?.iv?.toFixed(1) ?? "-"}</td>
                             <td className="px-3 py-2 text-muted-foreground font-mono">{pe?.volume?.toLocaleString("en-IN") ?? "-"}</td>
@@ -373,8 +435,15 @@ export default function Market() {
                             <td className="px-3 py-2 text-right font-mono text-amber-400">{ce?.theta != null ? `₹${ce.theta.toFixed(1)}` : "-"}</td>
                             <td className="px-3 py-2 text-right font-mono text-cyan-400">{ce?.vega != null ? ce.vega.toFixed(1) : "-"}</td>
                             <td className={cn("px-4 py-2 text-center font-bold font-mono", isAtm ? "text-primary" : "text-foreground")}>
-                              {isAtm && <span className="text-[9px] text-primary mr-1 font-normal border border-primary/40 px-1 rounded">ATM</span>}
-                              {strike.toLocaleString("en-IN")}
+                              <button
+                                onClick={() => handleOpenStrikeChart(strike, "CE")}
+                                className="group hover:text-primary hover:bg-primary/10 px-2 py-0.5 rounded transition-all inline-flex items-center gap-1 font-bold font-mono"
+                                title="Click to open real-time candlestick chart (Groww style)"
+                              >
+                                {isAtm && <span className="text-[9px] text-primary mr-0.5 font-normal border border-primary/40 px-1 rounded">ATM</span>}
+                                <span>{strike.toLocaleString("en-IN")}</span>
+                                <BarChart2 className="w-3 h-3 text-muted-foreground group-hover:text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
+                              </button>
                             </td>
                             <td className="px-3 py-2 font-mono font-semibold text-red-400">{pe?.delta != null ? pe.delta.toFixed(3) : "-"}</td>
                             <td className="px-3 py-2 font-mono text-muted-foreground">{pe?.gamma != null ? pe.gamma.toFixed(4) : "-"}</td>
@@ -391,6 +460,18 @@ export default function Market() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Groww-style Real-Time Candlestick Chart Modal */}
+      <StrikeChartModal
+        open={isChartModalOpen}
+        onOpenChange={setIsChartModalOpen}
+        data={chartModalData}
+        onQuickTrade={(params) => {
+          setLocation(
+            `/trade?symbol=${params.symbol}&strike=${params.strikePrice}&type=${params.optionType}&expiry=${params.expiry}&action=${params.action}`
+          );
+        }}
+      />
     </Layout>
   );
 }

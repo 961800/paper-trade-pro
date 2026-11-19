@@ -16,10 +16,13 @@ import {
   Settings, 
   User, 
   LogOut,
-  Menu
+  Menu,
+  BrainCircuit,
+  Sparkles
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
+import { Badge } from "./ui/badge";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,6 +32,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/market", label: "Market & Chain", icon: LineChart },
   { href: "/trade", label: "Trade Options", icon: ArrowRightLeft },
+  { href: "/mentor", label: "AI Trading Mentor", icon: BrainCircuit, isAi: true },
   { href: "/positions", label: "Positions", icon: Briefcase },
   { href: "/orders", label: "Order Book", icon: ListOrdered },
   { href: "/trades", label: "Trade History", icon: History },
@@ -58,9 +62,16 @@ export function Layout({ children }: LayoutProps) {
             const isActive = location === item.href;
             return (
               <Link key={item.href} href={item.href}>
-                <div className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${isActive ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}>
-                  <Icon className="w-5 h-5" />
-                  <span>{item.label}</span>
+                <div className={`flex items-center justify-between px-3 py-2.5 rounded-md cursor-pointer transition-colors ${isActive ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}>
+                  <div className="flex items-center gap-3">
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </div>
+                  {(item as any).isAi && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 px-1.5 py-0.5 rounded">
+                      AI
+                    </span>
+                  )}
                 </div>
               </Link>
             );

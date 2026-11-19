@@ -30,11 +30,41 @@ export default function Settings() {
   const [upstoxStatus, setUpstoxStatus] = useState<any>(null);
   const [savingUpstox, setSavingUpstox] = useState(false);
 
+  // Gemini API key state for AI Trading Mentor
+  const [geminiKeyInput, setGeminiKeyInput] = useState("");
+  const [geminiStatus, setGeminiStatus] = useState<any>(null);
+  const [savingGemini, setSavingGemini] = useState(false);
+
   React.useEffect(() => {
     customFetch<any>("/api/market/upstox-status")
       .then((data) => setUpstoxStatus(data))
       .catch(() => {});
+    customFetch<any>("/api/mentor/gemini-status")
+      .then((data) => setGeminiStatus(data))
+      .catch(() => {});
   }, []);
+
+  const handleSaveGeminiKey = async () => {
+    if (!geminiKeyInput.trim()) {
+      toast({ variant: "destructive", title: "API Key required", description: "Please enter your Google Gemini API key." });
+      return;
+    }
+    setSavingGemini(true);
+    try {
+      const res = await customFetch<{ success: boolean; message: string }>("/api/mentor/gemini-key", {
+        method: "POST",
+        body: JSON.stringify({ key: geminiKeyInput.trim() }),
+      });
+      toast({ title: "Gemini Key Saved!", description: res.message });
+      setGeminiKeyInput("");
+      const updated = await customFetch<any>("/api/mentor/gemini-status");
+      setGeminiStatus(updated);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Failed to save key", description: err.message });
+    } finally {
+      setSavingGemini(false);
+    }
+  };
 
   const handleSaveUpstoxToken = async () => {
     if (!upstoxTokenInput.trim()) {
@@ -235,6 +265,66 @@ export default function Settings() {
                   onClick={handleSaveUpstoxToken}
                 >
                   {savingUpstox ? "Connecting..." : "Test & Save Token"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ================= AI TRADING MENTOR (GEMINI API) ================= */}
+        <Card className="border-border">
+          <CardHeader className="py-3 px-4 border-b border-border flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <CardTitle className="text-sm">AI Trading Mentor — Google Gemini API</CardTitle>
+            </div>
+            {geminiStatus && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs font-semibold",
+                  geminiStatus.configured
+                    ? "bg-green-500/10 text-green-400 border-green-500/30"
+                    : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                )}
+              >
+                {geminiStatus.configured ? "GEMINI 2.5 ACTIVE" : "BUILT-IN ENGINE ACTIVE"}
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Your AI Personal Trading Mentor analyzes your real trade executions to detect behavioral mistakes (FOMO, Greed, Revenge Trading). Powered by Google Gemini through the official <code className="text-primary font-mono text-[11px]">@google/genai</code> SDK.
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold block">Google Gemini API Key</label>
+              <Input
+                type="password"
+                value={geminiKeyInput}
+                onChange={(e) => setGeminiKeyInput(e.target.value)}
+                placeholder={geminiStatus?.configured ? "•••••••••••••••••••••••••••••••• (Configured)" : "Enter Gemini API key (starts with AIzaSy...)"}
+                className="text-xs font-mono"
+              />
+              <div className="flex justify-between items-center text-[11px] text-muted-foreground">
+                <span>
+                  Get a free key from{" "}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline font-semibold"
+                  >
+                    Google AI Studio ↗
+                  </a>
+                </span>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs font-semibold"
+                  disabled={savingGemini}
+                  onClick={handleSaveGeminiKey}
+                >
+                  {savingGemini ? "Saving..." : "Save Gemini Key"}
                 </Button>
               </div>
             </div>

@@ -12,6 +12,7 @@ import { notificationsRouter } from "./notifications";
 import { dashboardRouter } from "./dashboard";
 import { analyticsRouter } from "./analytics";
 import { adminRouter } from "./admin";
+import mentorRouter from "./mentor";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use("/notifications", notificationsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/analytics", analyticsRouter);
 router.use("/admin", adminRouter);
+router.use("/mentor", mentorRouter);
 
 export default router;

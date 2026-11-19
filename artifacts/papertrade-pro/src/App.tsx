@@ -22,6 +22,7 @@ import Notifications from "@/pages/notifications";
 import Profile from "@/pages/profile";
 import Settings from "@/pages/settings";
 import AdminUsers from "@/pages/admin-users";
+import Mentor from "@/pages/mentor";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ function Router() {
       <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
       <Route path="/market"><ProtectedRoute component={Market} /></Route>
       <Route path="/trade"><ProtectedRoute component={Trade} /></Route>
+      <Route path="/mentor"><ProtectedRoute component={Mentor} /></Route>
       <Route path="/positions"><ProtectedRoute component={Positions} /></Route>
       <Route path="/orders"><ProtectedRoute component={Orders} /></Route>
       <Route path="/trades"><ProtectedRoute component={Trades} /></Route>

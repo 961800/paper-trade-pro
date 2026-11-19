@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TradingViewWidget } from "@/components/trading-view-widget";
+import { StrikeChartModal, StrikeChartData } from "@/components/strike-chart-modal";
 import { cn } from "@/lib/utils";
 import {
   ArrowUpIcon,
@@ -39,6 +40,7 @@ import {
   Crosshair,
   CheckCircle2,
   Lock,
+  BarChart2,
 } from "lucide-react";
 
 function useSearchParam(key: string) {
@@ -69,6 +71,7 @@ export default function Trade() {
 
   const [activeTab, setActiveTab] = useState<"single" | "strategy">("single");
   const [showChart, setShowChart] = useState(false);
+  const [isStrikeChartOpen, setIsStrikeChartOpen] = useState(false);
 
   // Single order form state
   const [symbol, setSymbol] = useState(useSearchParam("symbol") || "NIFTY");
@@ -350,6 +353,18 @@ export default function Trade() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {selectedOption && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsStrikeChartOpen(true)}
+                className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                title="Open Real-Time Candlestick Chart (Groww style)"
+              >
+                <BarChart2 className="w-4 h-4" />
+                <span>Strike Chart</span>
+              </Button>
+            )}
             <Button
               variant={showChart ? "default" : "outline"}
               size="sm"
@@ -357,7 +372,7 @@ export default function Trade() {
               className="gap-1.5"
             >
               <LineChart className="w-4 h-4" />
-              {showChart ? "Hide Chart" : "Live Chart"}
+              {showChart ? "Hide Spot" : "Spot Chart"}
               {showChart ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </Button>
             {marketStatus && (
@@ -983,6 +998,36 @@ export default function Trade() {
           </div>
         )}
       </div>
+
+      {/* Real-Time Strike Candlestick Chart Modal */}
+      {selectedOption && selectedStrike && (
+        <StrikeChartModal
+          open={isStrikeChartOpen}
+          onOpenChange={setIsStrikeChartOpen}
+          data={{
+            symbol,
+            strikePrice: selectedStrike,
+            optionType: selectedType,
+            expiry: selectedExpiry,
+            ltp: selectedOption.ltp,
+            change: selectedOption.change,
+            changePercent: selectedOption.changePercent,
+            iv: selectedOption.iv,
+            delta: selectedOption.delta,
+            gamma: selectedOption.gamma,
+            theta: selectedOption.theta,
+            vega: selectedOption.vega,
+            oi: selectedOption.oi,
+            volume: selectedOption.volume,
+            underlyingPrice: chain?.underlyingPrice,
+          }}
+          onQuickTrade={(params) => {
+            setSelectedStrike(params.strikePrice);
+            setSelectedType(params.optionType);
+            setAction(params.action);
+          }}
+        />
+      )}
     </Layout>
   );
 }
